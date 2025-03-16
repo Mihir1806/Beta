@@ -1,16 +1,17 @@
 import requests
 import pandas as pd
-from datetime import datetime
 import ssl
+from datetime import datetime
 from requests.adapters import HTTPAdapter
-from requests.packages.urllib3.poolmanager import PoolManager
+from urllib3.util.ssl_ import create_urllib3_context
 
-# Custom Adapter to enforce TLS
+# Custom adapter to enforce TLS 1.2+
 class TLSAdapter(HTTPAdapter):
     def init_poolmanager(self, *args, **kwargs):
-        context = ssl.create_default_context()
+        context = create_urllib3_context()
+        context.minimum_version = ssl.TLSVersion.TLSv1_2  # Enforce TLS 1.2+
         kwargs["ssl_context"] = context
-        super(TLSAdapter, self).init_poolmanager(*args, **kwargs)
+        super().init_poolmanager(*args, **kwargs)
 
 # Jira API details
 JIRA_URL = "https://your-jira-instance.atlassian.net"
@@ -29,9 +30,16 @@ session.headers.update({
 def fetch_jira_issues():
     url = f"{JIRA_URL}/rest/api/3/search"
     params = {"jql": JQL_QUERY, "maxResults": 100}
-    response = session.get(url, params=params)
-    response.raise_for_status()
-    return response.json()["issues"]
+    try:
+        response = session.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        return response.json().get("issues", [])
+    except requests.exceptions.SSLError as e:
+        print("SSL Error:", e)
+        return []
+    except requests.exceptions.RequestException as e:
+        print("Request Error:", e)
+        return []
 
 # Function to calculate KPIs
 def calculate_kpis(issues):
@@ -40,8 +48,8 @@ def calculate_kpis(issues):
     resolved_issues = []
     
     for issue in issues:
-        fields = issue["fields"]
-        if fields.get("resolutiondate"):
+        fields = issue.get("fields", {})
+        if "resolutiondate" in fields:
             created = datetime.strptime(fields["created"], "%Y-%m-%dT%H:%M:%S.%f%z")
             resolved = datetime.strptime(fields["resolutiondate"], "%Y-%m-%dT%H:%M:%S.%f%z")
             resolution_time = (resolved - created).total_seconds() / 3600  # Hours
@@ -63,9 +71,12 @@ if __name__ == "__main__":
     issues = fetch_jira_issues()
     print("Input (Fetched Issues):", issues)
     
-    print("Calculating KPIs...")
-    kpi_data = calculate_kpis(issues)
-    print("Output (Calculated KPIs):", kpi_data)
-    
-    print("Saving KPIs to Excel...")
-    save_to_excel(kpi_data)
+    if issues:
+        print("Calculating KPIs...")
+        kpi_data = calculate_kpis(issues)
+        print("Output (Calculated KPIs):", kpi_data)
+        
+        print("Saving KPIs to Excel...")
+        save_to_excel(kpi_data)
+    else:
+        print("No issues fetched. Please check Jira API settings.")
