@@ -1,0 +1,71 @@
+import requests
+import pandas as pd
+from datetime import datetime
+import ssl
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.poolmanager import PoolManager
+
+# Custom Adapter to enforce TLS
+class TLSAdapter(HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        context = ssl.create_default_context()
+        kwargs["ssl_context"] = context
+        super(TLSAdapter, self).init_poolmanager(*args, **kwargs)
+
+# Jira API details
+JIRA_URL = "https://your-jira-instance.atlassian.net"
+API_KEY = "your_api_key"
+JQL_QUERY = "project = YOUR_PROJECT AND status in ("Done", "Closed")"
+
+# Initialize requests session with custom TLS adapter
+session = requests.Session()
+session.mount("https://", TLSAdapter())
+session.headers.update({
+    "Accept": "application/json",
+    "Authorization": f"Basic {API_KEY}"
+})
+
+# Function to fetch data from Jira
+def fetch_jira_issues():
+    url = f"{JIRA_URL}/rest/api/3/search"
+    params = {"jql": JQL_QUERY, "maxResults": 100}
+    response = session.get(url, params=params)
+    response.raise_for_status()
+    return response.json()["issues"]
+
+# Function to calculate KPIs
+def calculate_kpis(issues):
+    total_issues = len(issues)
+    avg_resolution_time = 0
+    resolved_issues = []
+    
+    for issue in issues:
+        fields = issue["fields"]
+        if fields.get("resolutiondate"):
+            created = datetime.strptime(fields["created"], "%Y-%m-%dT%H:%M:%S.%f%z")
+            resolved = datetime.strptime(fields["resolutiondate"], "%Y-%m-%dT%H:%M:%S.%f%z")
+            resolution_time = (resolved - created).total_seconds() / 3600  # Hours
+            resolved_issues.append(resolution_time)
+    
+    if resolved_issues:
+        avg_resolution_time = sum(resolved_issues) / len(resolved_issues)
+    
+    return {"Total Issues": total_issues, "Avg Resolution Time (hrs)": avg_resolution_time}
+
+# Function to save KPIs to Excel
+def save_to_excel(kpi_data):
+    df = pd.DataFrame([kpi_data])
+    df.to_excel("jira_kpi_report.xlsx", index=False)
+    print("KPI report saved to jira_kpi_report.xlsx")
+
+if __name__ == "__main__":
+    print("Fetching issues from Jira...")
+    issues = fetch_jira_issues()
+    print("Input (Fetched Issues):", issues)
+    
+    print("Calculating KPIs...")
+    kpi_data = calculate_kpis(issues)
+    print("Output (Calculated KPIs):", kpi_data)
+    
+    print("Saving KPIs to Excel...")
+    save_to_excel(kpi_data)
