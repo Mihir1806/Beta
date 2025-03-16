@@ -1,0 +1,32 @@
+import pandas as pd
+
+def combine_excels(file1, sheet1, col1, file2, sheet2, lower_col, upper_col, output_file):
+    # Load the Excel files
+    df1 = pd.read_excel(file1, sheet_name=sheet1)
+    df2 = pd.read_excel(file2, sheet_name=sheet2)
+    
+    # Ensure the columns are numeric for comparison
+    df1[col1] = pd.to_numeric(df1[col1], errors='coerce')
+    df2[lower_col] = pd.to_numeric(df2[lower_col], errors='coerce')
+    df2[upper_col] = pd.to_numeric(df2[upper_col], errors='coerce')
+    
+    # Perform the conditional join efficiently
+    merged_rows = []
+    
+    for _, row1 in df1.iterrows():
+        matching_rows = df2[(df2[lower_col] <= row1[col1]) & (df2[upper_col] >= row1[col1])]
+        
+        if not matching_rows.empty:
+            for _, row2 in matching_rows.iterrows():
+                merged_rows.append({**row1.to_dict(), **row2.to_dict()})
+    
+    # Convert to DataFrame if matches found
+    if merged_rows:
+        merged_df = pd.DataFrame(merged_rows)
+        merged_df.to_excel(output_file, index=False)
+        print(f"Merged file saved as {output_file}")
+    else:
+        print("No matching rows found. Output file not created.")
+
+# Example usage
+combine_excels('file1.xlsx', 'Sheet1', 'ColumnA', 'file2.xlsx', 'Sheet1', 'LowerBound', 'UpperBound', 'merged_output.xlsx')
