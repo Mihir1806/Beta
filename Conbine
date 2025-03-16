@@ -1,0 +1,24 @@
+import pandas as pd
+
+def combine_excels(file1, sheet1, col1, file2, sheet2, lower_col, upper_col, output_file):
+    # Load the first Excel file
+    df1 = pd.read_excel(file1, sheet_name=sheet1)
+    
+    # Load the second Excel file
+    df2 = pd.read_excel(file2, sheet_name=sheet2)
+    
+    # Ensure the columns are numeric for comparison
+    df1[col1] = pd.to_numeric(df1[col1], errors='coerce')
+    df2[lower_col] = pd.to_numeric(df2[lower_col], errors='coerce')
+    df2[upper_col] = pd.to_numeric(df2[upper_col], errors='coerce')
+    
+    # Merge the data based on the condition
+    merged_df = df1.merge(df2, how='inner', left_on=df1[col1],
+                           right_on=df2.apply(lambda row: row[lower_col] <= df1[col1] <= row[upper_col], axis=1))
+    
+    # Save the result to a new Excel file
+    merged_df.to_excel(output_file, index=False)
+    print(f"Merged file saved as {output_file}")
+
+# Example usage
+combine_excels('file1.xlsx', 'Sheet1', 'ColumnA', 'file2.xlsx', 'Sheet1', 'LowerBound', 'UpperBound', 'merged_output.xlsx')
