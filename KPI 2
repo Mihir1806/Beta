@@ -17,14 +17,38 @@ headers = {
 # Fetch issues using the filter
 response = requests.get(url, headers=headers)
 
-# Check if the request was successful
-if response.status_code == 200:
-    issues = response.json().get("issues", [])
-    for issue in issues:
-        print(f"Issue Key: {issue['key']}")
-        print(f"Summary: {issue['fields']['summary']}")
-        print(f"Status: {issue['fields']['status']['name']}")
-        print("-" * 30)
-else:
-    print(f"Failed to fetch issues. Status Code: {response.status_code}")
-    print(f"Response: {response.text}")
+# Debug: Print raw response
+print(f"Status Code: {response.status_code}")
+print("Raw Response:", response.text)  
+
+# Ensure response is JSON
+try:
+    response_json = response.json()
+except ValueError:
+    print("Error: Response is not valid JSON.")
+    exit()
+
+# Ensure the response contains the expected keys
+if "issues" not in response_json:
+    print("Error: 'issues' key missing in response.")
+    print(response_json)  # Print full response for debugging
+    exit()
+
+# Extract issues
+issues = response_json["issues"]
+
+# Ensure there are issues
+if not issues:
+    print("No issues found for the given filter.")
+    exit()
+
+# Display issue details
+for issue in issues:
+    if "key" not in issue or "fields" not in issue or "summary" not in issue["fields"] or "status" not in issue["fields"]:
+        print(f"Skipping issue due to missing fields: {issue}")
+        continue
+    
+    print(f"Issue Key: {issue['key']}")
+    print(f"Summary: {issue['fields']['summary']}")
+    print(f"Status: {issue['fields']['status']['name']}")
+    print("-" * 30)
