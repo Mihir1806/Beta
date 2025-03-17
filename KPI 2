@@ -1,8 +1,79 @@
 import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
+
+# Jira Credentials
+JIRA_DOMAIN = "https://your-domain.atlassian.net"  # Replace with your Jira domain
+API_TOKEN = "your-api-token"  # Replace with your API token
+FILTER_ID = "12345"  # Replace with your Jira filter ID
+
+# Jira API Endpoint
+url = f"{JIRA_DOMAIN}/rest/api/2/search?jql=filter={FILTER_ID}"
+
+# Headers for authentication
+headers = {
+    "Authorization": f"Bearer {API_TOKEN}",
+    "Accept": "application/json"
+}
+
+# Configure retries
+session = requests.Session()
+retries = Retry(
+    total=5,  # Retry up to 5 times
+    backoff_factor=1,  # Wait 1s, then 2s, then 4s before retrying
+    status_forcelist=[500, 502, 503, 504],  # Retry on these HTTP errors
+)
+session.mount("https://", HTTPAdapter(max_retries=5))
+
+# Fetch issues using the filter
+try:
+    response = session.get(url, headers=headers, timeout=10)
+    response.raise_for_status()  # Raise an error for 4xx/5xx responses
+
+    # Ensure the response is JSON
+    response_json = response.json()
+
+    # Validate JSON structure
+    if "issues" not in response_json:
+        print("Error: 'issues' key missing in response.")
+        print("Full Response:", response_json)
+        exit()
+
+    # Extract and display issues
+    issues = response_json["issues"]
+    
+    if not issues:
+        print("No issues found for the given filter.")
+        exit()
+
+    for issue in issues:
+        if "key" not in issue or "fields" not in issue or "status" not in issue["fields"]:
+            print(f"Skipping issue due to missing fields: {issue}")
+            continue
+        
+        print(f"Issue Key: {issue['key']}")
+        print(f"Summary: {issue['fields']['summary']}")
+        print(f"Status: {issue['fields']['status']['name']}")
+        print("-" * 30)
+
+except requests.exceptions.RequestException as e:
+    print("Error:", e)
+
+
+
+
+
+
+##########################################
+
+
+import requests
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 # Jira credentials
-JIRA_DOMAIN = "https://your-domain.atlassian.net"
-API_TOKEN = "your-api-token"
+JIRA_DOMAIN = "https://your-domain.atlassian.net"  # Replace with your Jira domain
+API_TOKEN = "your-api-token"  # Replace with your actual API token
 FILTER_ID = "12345"  # Replace with your Jira filter ID
 
 # Jira API endpoint
@@ -14,41 +85,64 @@ headers = {
     "Accept": "application/json"
 }
 
-# Fetch issues using the filter
-response = requests.get(url, headers=headers)
+# Setup a requests session with retry strategy
+session = requests.Session()
+retries = Retry(
+    total=5,               # Retry up to 5 times
+    backoff_factor=1,      # Wait 1s, then 2s, then 4s, etc.
+    status_forcelist=[500, 502, 503, 504],  # Retry only on server errors
+    allowed_methods=["GET"]  # Only retry GET requests
+)
+session.mount("https://", HTTPAdapter(max_retries=retries))
 
-# Debug: Print raw response
-print(f"Status Code: {response.status_code}")
-print("Raw Response:", response.text)  
-
-# Ensure response is JSON
 try:
+    # Fetch issues using the filter
+    response = session.get(url, headers=headers, timeout=10)
+    response.raise_for_status()  # Raise an error for HTTP errors (e.g., 401, 403, 500)
+    
+    # Ensure the response is JSON
     response_json = response.json()
+
+    # Check if the response contains issues
+    if "issues" not in response_json:
+        print("Error: 'issues' key missing in response.")
+        print("Full Response:", response_json)
+        exit()
+
+    issues = response_json["issues"]
+
+    # If no issues found
+    if not issues:
+        print("No issues found for the given filter.")
+        exit()
+
+    # Display issue details
+    for issue in issues:
+        if "key" not in issue or "fields" not in issue or "summary" not in issue["fields"] or "status" not in issue["fields"]:
+            print(f"Skipping issue due to missing fields: {issue}")
+            continue
+
+        print(f"Issue Key: {issue['key']}")
+        print(f"Summary: {issue['fields']['summary']}")
+        print(f"Status: {issue['fields']['status']['name']}")
+        print("-" * 30)
+
+except requests.exceptions.ConnectionError:
+    print("Error: Unable to connect to Jira. Check your internet or firewall settings.")
+
+except requests.exceptions.Timeout:
+    print("Error: Request timed out. Try again later.")
+
+except requests.exceptions.HTTPError as err:
+    print(f"HTTP Error: {err}")
+
+except requests.exceptions.RequestException as err:
+    print(f"Request Error: {err}")
+
 except ValueError:
     print("Error: Response is not valid JSON.")
-    exit()
+    print("Raw Response:", response.text)
 
-# Ensure the response contains the expected keys
-if "issues" not in response_json:
-    print("Error: 'issues' key missing in response.")
-    print(response_json)  # Print full response for debugging
-    exit()
 
-# Extract issues
-issues = response_json["issues"]
 
-# Ensure there are issues
-if not issues:
-    print("No issues found for the given filter.")
-    exit()
 
-# Display issue details
-for issue in issues:
-    if "key" not in issue or "fields" not in issue or "summary" not in issue["fields"] or "status" not in issue["fields"]:
-        print(f"Skipping issue due to missing fields: {issue}")
-        continue
-    
-    print(f"Issue Key: {issue['key']}")
-    print(f"Summary: {issue['fields']['summary']}")
-    print(f"Status: {issue['fields']['status']['name']}")
-    print("-" * 30)
