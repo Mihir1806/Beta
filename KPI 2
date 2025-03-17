@@ -1,16 +1,30 @@
-from jira import JIRA
+import requests
 
 # Jira credentials
 JIRA_DOMAIN = "https://your-domain.atlassian.net"
 API_TOKEN = "your-api-token"
+FILTER_ID = "12345"  # Replace with your Jira filter ID
 
-# Jira connection
-options = {"server": JIRA_DOMAIN}
-jira = JIRA(options, token_auth=API_TOKEN)
+# Jira API endpoint
+url = f"{JIRA_DOMAIN}/rest/api/2/search?jql=filter={FILTER_ID}"
 
-# API Filter ID
-FILTER_ID = "12345"  # Replace with your actual filter ID
+# Headers for authentication
+headers = {
+    "Authorization": f"Bearer {API_TOKEN}",
+    "Accept": "application/json"
+}
 
 # Fetch issues using the filter
-issues = jira.search_issues(f"filter={FILTER_ID}", maxResults=5)
+response = requests.get(url, headers=headers)
 
+# Check if the request was successful
+if response.status_code == 200:
+    issues = response.json().get("issues", [])
+    for issue in issues:
+        print(f"Issue Key: {issue['key']}")
+        print(f"Summary: {issue['fields']['summary']}")
+        print(f"Status: {issue['fields']['status']['name']}")
+        print("-" * 30)
+else:
+    print(f"Failed to fetch issues. Status Code: {response.status_code}")
+    print(f"Response: {response.text}")
