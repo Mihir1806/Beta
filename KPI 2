@@ -1,0 +1,16 @@
+from jira import JIRA
+
+# Jira credentials
+JIRA_DOMAIN = "https://your-domain.atlassian.net"
+API_TOKEN = "your-api-token"
+
+# Jira connection
+options = {"server": JIRA_DOMAIN}
+jira = JIRA(options, token_auth=API_TOKEN)
+
+# API Filter ID
+FILTER_ID = "12345"  # Replace with your actual filter ID
+
+# Fetch issues using the filter
+issues = jira.search_issues(f"filter={FILTER_ID}", maxResults=5)
+
