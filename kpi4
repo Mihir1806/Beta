@@ -1,0 +1,31 @@
+import requests
+import ssl
+from requests.adapters import HTTPAdapter
+from urllib3.util.ssl_ import create_urllib3_context
+
+class SSLv3Adapter(HTTPAdapter):
+    def init_poolmanager(self, *args, **kwargs):
+        context = create_urllib3_context()
+        context.minimum_version = ssl.TLSVersion.SSLv3  # Force SSLv3
+        kwargs["ssl_context"] = context
+        super().init_poolmanager(*args, **kwargs)
+
+# Initialize session
+session = requests.Session()
+session.mount("https://", SSLv3Adapter())
+
+# Set headers
+session.headers.update({
+    "Referer": "https://your-jira-instance.atlassian.net",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0"
+})
+
+# Test request
+try:
+    response = session.get("https://your-jira-instance.atlassian.net/rest/api/3/search", timeout=10)
+    response.raise_for_status()
+    print("Success:", response.json())
+except requests.exceptions.SSLError as e:
+    print("SSL Error:", e)
+except requests.exceptions.RequestException as e:
+    print("Request Error:", e)
