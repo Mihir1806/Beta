@@ -47,6 +47,15 @@ I
 [Done] exited
 
 
+Create a ai bot in python llm without using api key to analyse the data and give solutions in phase
+Phase 1: to combine excel and create master data 
+Phase 2: explain column and skeleton of mater data to bot 
+Phase 3: compare the transaction data and master data and state what is wrong in transaction and how it can be corrected 
+Phase 4: to retrain the bot with training and testing of new cases 
+
+
+
+
 
 SSL error occurred: HTTPSConnectionPool (host='jira cib.echonet', port=443): Max retries exceeded with url: /rest/api/3/ filter/43358/results (Caused by SSLError(SSLError(1, '[SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] ssIv3 alert handshake failure(_ssl.c:997)')))
 [Donel exited with
