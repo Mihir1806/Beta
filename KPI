@@ -1,31 +1,28 @@
-import os
-import pandas as pd
-from pandasai import Agent
-import numpy as np 
-from pandasai import PandasAI 
-from pandasai.llm.openai import OpenAI
-import requests
+import http.client
 import json
 
 def get_jira_data(api_key, jira_url, filter_id):
+    conn = http.client.HTTPSConnection(jira_url)
     headers = {
         'Authorization': f'Bearer {api_key}',
         'Content-Type': 'application/json'
     }
     
     try:
-        response = requests.get(f'{jira_url}/rest/api/2/filter/{filter_id}/results', headers=headers, verify=False)  # Disable SSL verification
-        if response.status_code == 200:
-            return response.json()
+        conn.request("GET", f"/rest/api/2/filter/{filter_id}/results", headers=headers)
+        response = conn.getresponse()
+        
+        if response.status == 200:
+            data = response.read()
+            return json.loads(data)
         else:
-            print(f"Failed to fetch data: {response.status_code} - {response.text}")
+            print(f"Failed to fetch data: {response.status} - {response.reason}")
             return None
-    except requests.exceptions.SSLError as e:
-        print(f"SSL error occurred: {e}")
+    except Exception as e:
+        print(f"Error occurred: {e}")
         return None
 
 def calculate_kpis(data):
-    # Example KPI calculations
     total_issues = data['total']
     return {
         'total_issues': total_issues,
@@ -33,7 +30,7 @@ def calculate_kpis(data):
 
 def main():
     api_key = 'your_api_key_here'
-    jira_url = 'https://your_jira_instance.atlassian.net'
+    jira_url = 'your_jira_instance.atlassian.net'
     filter_id = 'YOUR_FILTER_ID'
     
     data = get_jira_data(api_key, jira_url, filter_id)
@@ -44,6 +41,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
 
 
