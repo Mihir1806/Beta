@@ -13,12 +13,14 @@ def combine_excels(file1, sheet1, col1, file2, sheet2, lower_col, upper_col, out
     # Perform the conditional join efficiently
     merged_rows = []
     
-    for _, row1 in df1.iterrows():
-        matching_rows = df2[(df2[lower_col] <= row1[col1]) & (df2[upper_col] >= row1[col1])]
-        
-        if not matching_rows.empty:
-            for _, row2 in matching_rows.iterrows():
-                merged_rows.append({**row1.to_dict(), **row2.to_dict()})
+       # Iterate through each row in Excel A
+    for index, row in df_a.iterrows():
+        value_a = row[column_a]
+        # Check if the value in column A is between the two columns in Excel B
+        for _, row_b in df_b.iterrows():
+            if row_b[column_b1] <= value_a <= row_b[column_b2]:
+                combined_data.append({**row.to_dict(), **row_b.to_dict()})
+
     
     # Convert to DataFrame if matches found
     if merged_rows:
