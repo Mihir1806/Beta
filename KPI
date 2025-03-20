@@ -55,3 +55,50 @@ if __name__ == "__main__":
     
     print("Saving KPIs to Excel...")
     save_to_excel(kpi_data)
+
+
+
+
+@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+
+
+import requests
+import json
+
+def get_jira_data(api_key, jira_url, filter_id):
+    headers = {
+        'Authorization': f'Bearer {api_key}',
+        'Content-Type': 'application/json'
+    }
+    
+    response = requests.get(f'{jira_url}/rest/api/2/filter/{filter_id}/results', headers=headers)
+    
+    if response.status_code == 200:
+        return response.json()
+    else:
+        print(f"Failed to fetch data: {response.status_code} - {response.text}")
+        return None
+
+def calculate_kpis(data):
+    # Example KPI calculations
+    total_issues = data['total']
+    # Add more KPI calculations as needed
+    return {
+        'total_issues': total_issues,
+        # Add more KPIs here
+    }
+
+def main():
+    api_key = 'your_api_key_here'
+    jira_url = 'https://your_jira_instance.atlassian.net'
+    filter_id = 'YOUR_FILTER_ID'
+    
+    data = get_jira_data(api_key, jira_url, filter_id)
+    
+    if data:
+        kpis = calculate_kpis(data)
+        print("KPIs:", kpis)
+
+if __name__ == "__main__":
+    main()
+
