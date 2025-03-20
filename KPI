@@ -43,6 +43,11 @@ if __name__ == "__main__":
 
 
 
+Error occurred: [WinError 10060] A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond
+I
+[Done] exited
+
+
 
 SSL error occurred: HTTPSConnectionPool (host='jira cib.echonet', port=443): Max retries exceeded with url: /rest/api/3/ filter/43358/results (Caused by SSLError(SSLError(1, '[SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] ssIv3 alert handshake failure(_ssl.c:997)')))
 [Donel exited with
