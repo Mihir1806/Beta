@@ -1,8 +1,8 @@
 import http.client
 import json
 
-def get_jira_data(api_key, jira_url, filter_id):
-    conn = http.client.HTTPSConnection(jira_url)
+def get_jira_data(api_key, filter_id):
+    conn = http.client.HTTPSConnection("echonet.bnpparibas")
     headers = {
         'Authorization': f'Bearer {api_key}',
         'Content-Type': 'application/json'
@@ -30,10 +30,9 @@ def calculate_kpis(data):
 
 def main():
     api_key = 'your_api_key_here'
-    jira_url = 'your_jira_instance.atlassian.net'
     filter_id = 'YOUR_FILTER_ID'
     
-    data = get_jira_data(api_key, jira_url, filter_id)
+    data = get_jira_data(api_key, filter_id)
     
     if data:
         kpis = calculate_kpis(data)
@@ -41,7 +40,6 @@ def main():
 
 if __name__ == "__main__":
     main()
-
 
 
 
