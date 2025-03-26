@@ -1,0 +1,11 @@
+We would like to bring to your attention a critical issue regarding unauthorized modifications in the GESTAB tables during the MIAMI project:
+	•	A502 is a GESTAB that includes the account type.
+	•	A513 is a GESTAB where the account type is linked to a subcode. If no subcode is present, the default mapping is set to 000.
+
+As part of the MIAMI project, the project team introduced two new subcodes (001 and 002) linked to account type 002 (Loro account). This change altered the default mapping without prior approval.
+
+Despite multiple requests from the Paris team for the project group to consult the GESTAB owner before making modifications, these requests were ignored. The team proceeded with testing and even requested deployment without validation from the AT2 MOA team. Eventually, the Paris team escalated the matter to AT2 MOA, recognizing that modifying a standard account type required formal validation.
+
+Had this change been deployed, it would have had a significant impact across the group due to incorrect mapping. To mitigate this risk, we have requested an immediate rollback of these unauthorized changes, as such modifications should not have been made without proper governance and approval.
+
+We want to ensure management is aware of this situation. We are happy to provide further details or discuss preventive measures to avoid similar occurrences in the future.
