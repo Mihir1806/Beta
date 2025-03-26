@@ -9,3 +9,23 @@ Despite multiple requests from the Paris team for the project group to consult t
 Had this change been deployed, it would have had a significant impact across the group due to incorrect mapping. To mitigate this risk, we have requested an immediate rollback of these unauthorized changes, as such modifications should not have been made without proper governance and approval.
 
 We want to ensure management is aware of this situation. We are happy to provide further details or discuss preventive measures to avoid similar occurrences in the future.
+
+
+
+Future Expectations:
+
+To prevent similar unauthorized changes in the future, we propose the following governance measures:
+	1.	Mandatory Approval Before Changes
+	•	Any modification to GESTAB must be formally validated by the GESTAB owner and impacted stakeholders before implementation.
+	•	A documented approval process must be followed, ensuring accountability at each step.
+	2.	Stakeholder Involvement in Critical Changes
+	•	Changes affecting standard account types must be reviewed with all relevant teams, including AT2 MOA and the Paris team, before execution.
+	•	Project teams must engage in discussions proactively rather than seeking approvals after changes are made.
+	3.	Deployment Requests Only After Validation
+	•	No deployment requests should be raised until all required approvals are obtained and documented.
+	•	Any request without prior validation should be rejected by the deployment team.
+	4.	Impact Assessment as a Standard Process
+	•	Before implementing any changes, a thorough impact assessment must be conducted to evaluate potential risks and system-wide effects.
+	•	If a modification affects default mappings or standard configurations, it should be treated as a high-risk change and require additional scrutiny.
+
+We seek management’s support in reinforcing these expectations to ensure governance, accountability, and risk mitigation. Please let us know if a further discussion is required.
