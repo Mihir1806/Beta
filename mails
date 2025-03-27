@@ -29,3 +29,16 @@ To prevent similar unauthorized changes in the future, we propose the following 
 	•	If a modification affects default mappings or standard configurations, it should be treated as a high-risk change and require additional scrutiny.
 
 We seek management’s support in reinforcing these expectations to ensure governance, accountability, and risk mitigation. Please let us know if a further discussion is required.
+
+
+
+
+During the meeting, we were informed that the Miami SG team is planning to replicate Miami EMEA data. In this context, there is no involvement for Fresh.
+
+However, it appears that, in addition to data replication, modifications were made to Gestab, which includes standard parameters, without prior validation. The Paris HO team had advised consulting the MOA team multiple times, but no formal concerns were raised by the MOA team.
+
+Since Miami EMEA operates on a different platform, it should not be synchronized with CIB. On the other hand, SG Miami is a project within CIB and should remain aligned with it. Moving forward, our expectation is that any changes to standard components such as Gestab, GA Loader, etc., should go through the necessary approval process to ensure alignment and consistency.
+
+
+
+
