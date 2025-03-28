@@ -1,0 +1,11 @@
+Hi Kenny,
+
+To better understand the changes made to the standard parameters for this subject, we reviewed the planned updates for deployment as part of MIAMI-SG (CBGS-112756). During this review, we also examined a sample update and would like to highlight that multiple standard tables have been modified without the AT-MOA team’s knowledge. Below are some key observations:
+	•	Updates to Standard Gestab Parameters – Tables Beginning with “T”:
+	•	Several standard tables, such as T502, have been updated.
+	•	For example, the dormancy period has been modified from 180 to 365 days, impacting both CIB & BP2S.
+	•	No requests were raised with the MOA team for these changes.
+	•	The structure of T502 Gestab is also incorrect, which may lead to further inconsistencies.
+	•	As per the standard process, T502 deployment should always be done via off-patch, as it is a standard table. It cannot be planned for site-specific deployment.
+
+Additionally, we have observed modifications to the existing attributes of standard account type codes.
