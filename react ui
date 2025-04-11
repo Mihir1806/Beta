@@ -1,0 +1,83 @@
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+
+const Dashboard = () => {
+  const [activeTab, setActiveTab] = useState("job");
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case "job":
+        return <JobStatus />;
+      case "excel":
+        return <ExcelSheet />;
+      case "notes":
+        return <Notes />;
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="grid grid-cols-4 h-screen">
+      <div className="col-span-1 bg-gray-100 p-4 shadow-xl">
+        <h2 className="text-xl font-bold mb-4">Hello User</h2>
+        <div className="flex flex-col gap-2">
+          <Button variant="outline" onClick={() => setActiveTab("job")}>Job Status</Button>
+          <Button variant="outline" onClick={() => setActiveTab("excel")}>Excel Sheet</Button>
+          <Button variant="outline" onClick={() => setActiveTab("notes")}>Notes</Button>
+        </div>
+      </div>
+      <div className="col-span-3 p-6 bg-white">
+        {renderContent()}
+      </div>
+    </div>
+  );
+};
+
+const JobStatus = () => {
+  const [xCode, setXCode] = useState(null);
+
+  // Simulating fetching xCode from Python backend
+  React.useEffect(() => {
+    const fetchXCode = async () => {
+      // Replace this with actual API call to Python backend
+      const response = await new Promise((res) => setTimeout(() => res("X123-456"), 500));
+      setXCode(response);
+    };
+    fetchXCode();
+  }, []);
+
+  return (
+    <Card>
+      <CardContent>
+        <h3 className="text-lg font-semibold mb-2">Job Status</h3>
+        {xCode ? <p>Code from Python: {xCode}</p> : <p>Loading...</p>}
+      </CardContent>
+    </Card>
+  );
+};
+
+const ExcelSheet = () => {
+  return (
+    <Card>
+      <CardContent>
+        <h3 className="text-lg font-semibold mb-2">Excel Sheet</h3>
+        <p>Display or upload Excel sheet here.</p>
+      </CardContent>
+    </Card>
+  );
+};
+
+const Notes = () => {
+  return (
+    <Card>
+      <CardContent>
+        <h3 className="text-lg font-semibold mb-2">Notes</h3>
+        <textarea className="w-full h-48 p-2 border rounded" placeholder="Write your notes here..." />
+      </CardContent>
+    </Card>
+  );
+};
+
+export default Dashboard;
