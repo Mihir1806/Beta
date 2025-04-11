@@ -1,0 +1,103 @@
+import win32com.client
+import pandas as pd
+from datetime import datetime
+
+def extract_outlook_subjects(folder_name="Inbox"):
+    outlook = win32com.client.Dispatch("Outlook.Application").GetNamespace("MAPI")
+    inbox = outlook.GetDefaultFolder(6)  # 6 = Inbox
+
+    # Navigate to subfolder if provided
+    folder = inbox.Folders[folder_name] if folder_name else inbox
+    messages = folder.Items
+    messages.Sort("[ReceivedTime]", True)
+
+    data = []
+
+    for message in messages:
+        subject = message.Subject
+        received = message.ReceivedTime
+        if "Success" in subject or "Failure" in subject:
+            status = "Success" if "Success" in subject else "Failure"
+            data.append({
+                "Subject": subject,
+                "Status": status,
+                "ReceivedTime": received
+            })
+
+    df = pd.DataFrame(data)
+    file_name = f"outlook_status_data_{datetime.now().strftime('%Y%m%d%H%M%S')}.xlsx"
+    df.to_excel(file_name, index=False)
+    print(f"Saved data to {file_name}")
+
+if __name__ == "__main__":
+    extract_outlook_subjects("YourFolderName")  # Replace with actual folder name if needed
+
+
+
+
+
+
+
+
+
+
+
+import tkinter as tk
+from tkinter import ttk, filedialog
+from ttkthemes import ThemedTk
+import pandas as pd
+import math
+
+def calculate_success_rate(filepath):
+    try:
+        df = pd.read_excel(filepath)
+        total = len(df)
+        success_count = len(df[df["Status"] == "Success"])
+        if total == 0:
+            return 0
+        return round((success_count / total) * 100, 2)
+    except Exception as e:
+        print("Error:", e)
+        return 0
+
+def draw_circle(canvas, percent):
+    canvas.delete("all")
+    canvas.create_oval(10, 10, 190, 190, outline="#eee", width=12)
+
+    angle = percent * 3.6
+    for i in range(int(angle)):
+        rad = math.radians(i - 90)
+        x = 100 + 85 * math.cos(rad)
+        y = 100 + 85 * math.sin(rad)
+        canvas.create_line(100, 100, x, y, fill="#22C55E" if percent >= 50 else "#EF4444", width=6)
+
+    canvas.create_text(100, 100, text=f"{percent}%", font=("Helvetica", 16, "bold"), fill="#111")
+
+def load_excel_file():
+    file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx")])
+    if file_path:
+        percent = calculate_success_rate(file_path)
+        draw_circle(canvas, percent)
+
+# GUI
+app = ThemedTk(theme="arc")
+app.title("Success or Failure Graph")
+app.geometry("320x420")
+app.resizable(False, False)
+
+tk.Label(app, text="Hi Rakib!", font=("Helvetica", 18, "bold")).pack(pady=10)
+tk.Label(app, text="Success or Failure", font=("Helvetica", 14)).pack()
+
+canvas = tk.Canvas(app, width=200, height=200, bg="white", highlightthickness=0)
+canvas.pack(pady=10)
+
+ttk.Button(app, text="Load Excel File", command=load_excel_file).pack(pady=20)
+
+app.mainloop()
+
+
+
+
+
+
+
