@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Task Stats Dashboard</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      background: #f0f2f5;
+      display: flex;
+      justify-content: space-between;
+      padding: 20px;
+    }
+    .sidebar, .main, .mirror {
+      width: 30%;
+      background: white;
+      padding: 20px;
+      box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      border-radius: 12px;
+    }
+    h2 {
+      font-size: 18px;
+      margin-bottom: 10px;
+    }
+    .stat {
+      margin-bottom: 20px;
+    }
+    .bar {
+      height: 10px;
+      background: #e0e0e0;
+      border-radius: 5px;
+      overflow: hidden;
+      margin-top: 5px;
+    }
+    .fill {
+      height: 100%;
+      background: #fbbf24;
+    }
+    canvas {
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h2>Job Status</h2>
+    <div class="stat">
+      <p>Running Jobs</p>
+      <div class="bar"><div class="fill" style="width: 60%"></div></div>
+      <p>12 jobs</p>
+    </div>
+    <div class="stat">
+      <p>Completed Jobs</p>
+      <div class="bar"><div class="fill" style="width: 85%"></div></div>
+      <p>34 jobs</p>
+    </div>
+    <h2>Jira Status</h2>
+    <div class="stat">
+      <p>Open Issues</p>
+      <div class="bar"><div class="fill" style="width: 45%"></div></div>
+      <p>18 issues</p>
+    </div>
+    <div class="stat">
+      <p>Closed Issues</p>
+      <div class="bar"><div class="fill" style="width: 70%"></div></div>
+      <p>42 issues</p>
+    </div>
+  </div>
+
+  <div class="main">
+    <h2>My Activity</h2>
+    <canvas id="activityChart" height="250"></canvas>
+  </div>
+
+  <div class="mirror">
+    <h2>Job Status</h2>
+    <div class="stat">
+      <p>Running Jobs</p>
+      <div class="bar"><div class="fill" style="width: 60%"></div></div>
+      <p>12 jobs</p>
+    </div>
+    <div class="stat">
+      <p>Completed Jobs</p>
+      <div class="bar"><div class="fill" style="width: 85%"></div></div>
+      <p>34 jobs</p>
+    </div>
+    <h2>Jira Status</h2>
+    <div class="stat">
+      <p>Open Issues</p>
+      <div class="bar"><div class="fill" style="width: 45%"></div></div>
+      <p>18 issues</p>
+    </div>
+    <div class="stat">
+      <p>Closed Issues</p>
+      <div class="bar"><div class="fill" style="width: 70%"></div></div>
+      <p>42 issues</p>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script>
+    const ctx = document.getElementById('activityChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: ['07 Nov', '08 Nov', '09 Nov', '10 Nov', '11 Nov', '12 Nov', '13 Nov'],
+        datasets: [{
+          label: 'Activity',
+          data: [40, 65, 50, 70, 90, 45, 60],
+          backgroundColor: '#fbbf24',
+          borderRadius: 6
+        }]
+      },
+      options: {
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true
+          }
+        }
+      }
+    });
+  </script>
+</body>
+</html>
