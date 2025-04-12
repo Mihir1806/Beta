@@ -105,3 +105,112 @@ if __name__ == '__main__':
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+# This is a simple Streamlit UI that displays job and Jira statuses dynamically.
+import streamlit as st
+import random
+
+st.set_page_config(page_title="Task Stats Dashboard", layout="wide")
+
+# Simulated backend logic (can be replaced with actual data sources)
+def fetch_job_status():
+    return {
+        "running": 12,
+        "completed": 34,
+        "running_percent": 60,
+        "completed_percent": 85
+    }
+
+def fetch_jira_status():
+    return {
+        "open": 18,
+        "closed": 42,
+        "open_percent": 45,
+        "closed_percent": 70
+    }
+
+# Layout starts here
+st.title("Task Stats Dashboard")
+
+# Split layout into 3 columns
+left, center, right = st.columns([1, 2, 1])
+
+# Left Sidebar - Job and Jira Status
+with left:
+    st.subheader("Job Status")
+    job_status = fetch_job_status()
+    st.text("Running Jobs")
+    st.progress(job_status["running_percent"])
+    st.text(f"{job_status['running']} jobs")
+
+    st.text("Completed Jobs")
+    st.progress(job_status["completed_percent"])
+    st.text(f"{job_status['completed']} jobs")
+
+    st.subheader("Jira Status")
+    jira_status = fetch_jira_status()
+    st.text("Open Issues")
+    st.progress(jira_status["open_percent"])
+    st.text(f"{jira_status['open']} issues")
+
+    st.text("Closed Issues")
+    st.progress(jira_status["closed_percent"])
+    st.text(f"{jira_status['closed']} issues")
+
+# Center Chart - Simulated Activity
+with center:
+    st.subheader("My Activity")
+    import pandas as pd
+    import altair as alt
+
+    data = pd.DataFrame({
+        "Date": pd.date_range("2025-11-07", periods=7, freq='D'),
+        "Activity": [40, 65, 50, 70, 90, 45, 60]
+    })
+
+    chart = alt.Chart(data).mark_bar(cornerRadiusTopLeft=5, cornerRadiusTopRight=5).encode(
+        x='Date:T',
+        y='Activity:Q',
+        tooltip=['Date:T', 'Activity:Q']
+    ).properties(height=300)
+
+    st.altair_chart(chart, use_container_width=True)
+
+# Right Sidebar - Mirror of Left
+with right:
+    st.subheader("Job Status")
+    st.text("Running Jobs")
+    st.progress(job_status["running_percent"])
+    st.text(f"{job_status['running']} jobs")
+
+    st.text("Completed Jobs")
+    st.progress(job_status["completed_percent"])
+    st.text(f"{job_status['completed']} jobs")
+
+    st.subheader("Jira Status")
+    st.text("Open Issues")
+    st.progress(jira_status["open_percent"])
+    st.text(f"{jira_status['open']} issues")
+
+    st.text("Closed Issues")
+    st.progress(jira_status["closed_percent"])
+    st.text(f"{jira_status['closed']} issues")
+
+
+
+
+
+
+
