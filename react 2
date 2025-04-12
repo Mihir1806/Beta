@@ -1,0 +1,111 @@
+import React from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Switch } from "@/components/ui/switch";
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer } from "recharts";
+
+const data = [
+  { name: "07 Nov", value: 40 },
+  { name: "08 Nov", value: 65 },
+  { name: "09 Nov", value: 50 },
+  { name: "10 Nov", value: 70 },
+  { name: "11 Nov", value: 90 },
+  { name: "12 Nov", value: 45 },
+  { name: "13 Nov", value: 60 },
+];
+
+export default function TaskStatsDashboard() {
+  return (
+    <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-6 bg-gray-100 min-h-screen">
+      <div className="col-span-1">
+        <Card className="p-4 mb-6">
+          <h2 className="text-xl font-bold mb-4">Job Status</h2>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-gray-500">Running Jobs</p>
+              <Progress value={60} className="mb-1" />
+              <p className="text-sm">12 jobs</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Completed Jobs</p>
+              <Progress value={85} className="mb-1" />
+              <p className="text-sm">34 jobs</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <h2 className="text-xl font-bold mb-4">Jira Status</h2>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-gray-500">Open Issues</p>
+              <Progress value={45} className="mb-1" />
+              <p className="text-sm">18 issues</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Closed Issues</p>
+              <Progress value={70} className="mb-1" />
+              <p className="text-sm">42 issues</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      <div className="col-span-2">
+        <Card className="p-4">
+          <h2 className="text-xl font-bold mb-4">My Activity</h2>
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart data={data}>
+              <XAxis dataKey="name" />
+              <Tooltip />
+              <Bar dataKey="value" fill="#facc15" radius={[8, 8, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </Card>
+
+        <Card className="mt-6 p-4 flex items-center justify-between">
+          <div>
+            <p className="text-sm text-gray-500">You are better than 73% of users</p>
+            <Progress value={73} className="mt-2" />
+          </div>
+          <Switch />
+        </Card>
+      </div>
+
+      <div className="col-span-1">
+        <Card className="p-4 mb-6">
+          <h2 className="text-xl font-bold mb-4">Job Status</h2>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-gray-500">Running Jobs</p>
+              <Progress value={60} className="mb-1" />
+              <p className="text-sm">12 jobs</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Completed Jobs</p>
+              <Progress value={85} className="mb-1" />
+              <p className="text-sm">34 jobs</p>
+            </div>
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <h2 className="text-xl font-bold mb-4">Jira Status</h2>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-gray-500">Open Issues</p>
+              <Progress value={45} className="mb-1" />
+              <p className="text-sm">18 issues</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Closed Issues</p>
+              <Progress value={70} className="mb-1" />
+              <p className="text-sm">42 issues</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
