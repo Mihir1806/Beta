@@ -1,63 +1,14 @@
-Sure! Here’s a detailed visual breakdown of the UI shown in the image “frame and button.png”:
-
-Frame:
-	•	Color: Light gray/white background.
-	•	Border Radius: Soft, rounded corners.
-	•	Shadow Style: Subtle drop shadow giving a floating or card-like effect.
-
-Typography:
-	•	Header Text: “Minimalist UI Kits” in a light gray color and thin sans-serif font, centered.
-
-⸻
-
-Icons (Top Row):
-	•	4 circular icons with soft shadows:
-	1.	First icon: Image icon with a blue-purple outline.
-	2.	Second icon: Grayscale version of image icon.
-	3.	Third icon: Music note with a purple-blue gradient.
-	4.	Fourth icon: Grayscale music note icon.
-
-⸻
-
-Buttons:
-	•	Button 1 & Button 2:
-	•	Light gray background.
-	•	Rounded rectangles with subtle shadows.
-	•	Flat design with soft edges.
-	•	Minimalist text labels.
-
-⸻
-
-Gradient Buttons:
-	•	Gradient 1:
-	•	Gradient from cyan-blue to purple.
-	•	Rounded rectangle shape.
-	•	Gradient 2:
-	•	Similar gradient but more purple-heavy.
-	•	Same shape and style as Gradient 1.
-
-⸻
-
-Input Fields:
-	•	Input 1 & Input 2:
-	•	Light gray rectangular fields.
-	•	Rounded corners.
-	•	Subtle shadow.
-	•	Placeholder text style.
-
-⸻
-
-Sliders:
-	•	Two horizontal sliders:
-	•	Top slider: Purple-blue gradient track with a white thumb.
-	•	Bottom slider: Light gray track and thumb.
-
-⸻
-
-Bottom Icons/Controls:
-	•	3 navigation buttons:
-	•	Left and right arrows in light gray circular buttons.
-	•	A home icon with both an outlined and filled version.
-	•	Toggle Switch:
-	•	Active switch with blue fill and white thumb.
-	•	Inactive switch with gray fill.
+Redesign the Job Analytics Dashboard interface to have a modern, minimalist look while preserving all existing features and data. Keep all components in place, but visually enhance them as follows:
+	•	Use a light theme with a white or soft gray background instead of the current dark theme.
+	•	Replace blocky elements with rounded corners throughout (cards, buttons, input fields, etc.).
+	•	Style the buttons (“Today”, “7 Days”, “30 Days”, “Apply Date Range”, “Reset Filters”) with soft shadows, subtle hover effects, and muted blue gradients.
+	•	Use modern sans-serif fonts with medium weight for readability and a cleaner appearance.
+	•	Introduce a card layout for sections like Filter Options, Job Status Distribution, and the Job Table – each with a soft drop shadow.
+	•	Update the pie chart to a sleeker, flat design with a pastel green for “Success” and coral red for “Failure”, and animate the segments on hover.
+	•	Style the job table with:
+	•	White background and subtle row separators.
+	•	Light blue highlight for hovered rows.
+	•	Rounded table headers and better spacing for columns.
+	•	Align text for readability and add minimal border radius around the table box.
+	•	Remove all heavy outlines; use fine lines or light separators for divisions.
+	•	Keep all existing labels, filters, and data fields unchanged in position and naming.
