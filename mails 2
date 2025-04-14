@@ -50,3 +50,74 @@ Typography should remain clean and professional, with primary text in a deep gre
 6. Data Visualization
 	•	Use a donut chart with smooth edges and labels inside.
 	•	Use light gradients or soft shadows to add depth to visual elements
+
+
+
+
+
+
+
+
+
+
+
+#############
+#############
+
+
+
+
+Please redesign the entire interface to follow modern UI/UX principles. The dashboard includes:
+	•	A pie chart for job status distribution (success/failure) using matplotlib.
+	•	A job table (with job name, status, execution time).
+	•	Date filter buttons (Today, 7 Days, 30 Days).
+	•	A custom calendar widget for date range selection.
+
+Redesign Goals:
+
+1. Overall Visual Style:
+	•	Use a clean light theme with lots of white space and gentle accent colors.
+	•	All UI elements should have rounded corners.
+	•	Add subtle shadows or simulate elevation for frames and widgets using layered Canvas, gradients, or ttk themes.
+	•	Use consistent margins/padding, and modern fonts (e.g., Segoe UI, Roboto).
+
+2. Date Filter Buttons:
+	•	Replace standard Button with pill-shaped, rounded buttons.
+	•	Add hover and click animations (change background, soft shadow).
+	•	Button layout should be horizontal and responsive.
+
+3. Job Status Chart (Matplotlib):
+	•	Keep using matplotlib, but:
+	•	Style as a donut chart with bold colors: green (success), red (failure).
+	•	Hide axes/grid for a minimal look.
+	•	Show total jobs inside the donut chart.
+
+4. Job Table:
+	•	Use a styled ttk.Treeview with:
+	•	Alternating row colors (zebra striping).
+	•	Hover effects or row highlight on select.
+	•	Icons or emojis for success/failure (green check/red cross).
+	•	Rounded frame and scrollbars with modern styling.
+
+5. Custom Calendar Widget:
+	•	Redesign calendar popup to look modern:
+	•	Rounded frame with soft drop shadow.
+	•	Highlight today’s date and selected range using accent color (e.g., blue).
+	•	Use modern fonts and spacing between days.
+	•	Add navigation arrows (left/right) for changing months.
+	•	Use color highlights and subtle animations for hover/select states.
+
+6. Extra Enhancements (Optional):
+	•	Add a top navigation bar with app title and profile icon.
+	•	Make layout resizable/responsive.
+	•	Support dark/light mode toggle if possible.
+
+Tech Stack:
+	•	Python
+	•	tkinter + ttk (UI components)
+	•	matplotlib (for chart)
+	•	tkcalendar or custom calendar (for date selection)
+	•	Optional: PIL for icons/images
+
+
+
