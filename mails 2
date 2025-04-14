@@ -5,3 +5,48 @@ The primary accent color throughout the dashboard should be a modern, vibrant pu
 To indicate job success or failure, use a fresh green (#10B981) for success statuses and elements, and a bright red (#EF4444) for failure indicators. This color coding can also be applied in pie charts, status badges, or text labels.
 
 Typography should remain clean and professional, with primary text in a deep grey (#111827) and secondary or less important text in a soft grey (#6B7280). Use light grey dividers or table borders (#E5E7EB) to separate content without cluttering the UI. Altogether, this styling will make your dashboard feel modern, user-friendly, and visually engaging.
+
+
+
+
+
+
+
+
+1. Use Card-Based Layouts
+	•	Wrap each section (Filters, Chart, Table) in a rounded card with subtle shadow and padding.
+	•	Maintain consistent spacing between cards.
+
+⸻
+
+2. Apply Modern Styling
+	•	Use a dark theme with a consistent color palette (dark background, soft blue accents, white text).
+	•	Apply rounded corners to all UI elements (buttons, input fields, table).
+
+⸻
+
+3. Enhance Table Appearance
+	•	Use striped rows for better readability.
+	•	Add status badges with colors (green for success, red for failure).
+	•	Bold headers with a slightly different background color.
+	•	Add hover effects on rows.
+
+⸻
+
+4. Improve Interactions
+	•	Make buttons clickable with hover and pressed states.
+	•	Enable sorting on table columns (visually indicated with arrows).
+	•	Include a search/filter bar above the table for quick access.
+
+⸻
+
+5. Typography & Spacing
+	•	Use a clean font like Inter or Roboto.
+	•	Keep consistent padding and margins (e.g., 16px or 24px).
+	•	Ensure text is left-aligned, readable, and properly sized.
+
+⸻
+
+6. Data Visualization
+	•	Use a donut chart with smooth edges and labels inside.
+	•	Use light gradients or soft shadows to add depth to visual elements
