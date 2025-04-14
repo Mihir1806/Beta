@@ -1,1 +1,7 @@
-Can you rewrite this UI in a newer version with improved design and functionality? Please modernize the layout using the latest UI/UX best practices, ensure it’s responsive across devices, and enhance the overall interactivity. Feel free to refactor the code and use updated frameworks or components where appropriate. The goal is a cleaner, faster, and more intuitive user experience.”
+To modernize your Job Analytics Dashboard with a look and feel similar to the FinSet dashboard, use a clean, light-themed design. Start with a soft light grey or off-white background (#F9FAFB) to give a calm and minimal appearance. Each card or widget — such as the job list, job status distribution, and filter options — should have a pure white background (#FFFFFF) with smooth rounded corners (around 16px) and a subtle soft shadow (rgba(0, 0, 0, 0.05)) to add depth and layering.
+
+The primary accent color throughout the dashboard should be a modern, vibrant purple (#7C3AED). Use this for primary buttons (like “Apply Date Range”), active tabs, highlighted elements, and portions of graphs. For hover states or subtle highlights, use a lighter lavender tone (#C4B5FD).
+
+To indicate job success or failure, use a fresh green (#10B981) for success statuses and elements, and a bright red (#EF4444) for failure indicators. This color coding can also be applied in pie charts, status badges, or text labels.
+
+Typography should remain clean and professional, with primary text in a deep grey (#111827) and secondary or less important text in a soft grey (#6B7280). Use light grey dividers or table borders (#E5E7EB) to separate content without cluttering the UI. Altogether, this styling will make your dashboard feel modern, user-friendly, and visually engaging.
