@@ -1,81 +1,138 @@
-import requests
+import tkinter as tk
+from tkinter import ttk, filedialog
 import pandas as pd
-import ssl
-from datetime import datetime
-from requests.adapters import HTTPAdapter
-from urllib3.util.ssl_ import create_urllib3_context
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from datetime import datetime, timedelta
+import webbrowser
+import os
 
-# Custom adapter to enforce TLS 1.2+
-class TLSAdapter(HTTPAdapter):
-    def init_poolmanager(self, *args, **kwargs):
-        context = create_urllib3_context()
-        context.minimum_version = ssl.TLSVersion.TLSv1_2  # Enforce TLS 1.2+
-        kwargs["ssl_context"] = context
-        super().init_poolmanager(*args, **kwargs)
+# Main app window
+root = tk.Tk()
+root.title("Job Analytics Dashboard")
+root.geometry("1100x700")
+root.configure(bg="#1e1e1e")
 
-# Jira API details
-JIRA_URL = "https://your-jira-instance.atlassian.net"
-API_KEY = "your_api_key"
-JQL_FILTER_ID = "your_filter_id"
+# Global variables
+dataframe = pd.DataFrame()
 
-# Initialize requests session with custom TLS adapter
-session = requests.Session()
-session.mount("https://", TLSAdapter())
-session.headers.update({
-    "Accept": "application/json",
-    "Authorization": f"Basic {API_KEY}"
-})
+# Functions
+def load_excel():
+    global dataframe
+    file_path = filedialog.askopenfilename(filetypes=[("Excel files", "*.xlsx *.xls")])
+    if file_path:
+        dataframe = pd.read_excel(file_path)
+        dataframe['Received_Date'] = pd.to_datetime(dataframe['Received_Date']).dt.date
+        filter_and_update('30 Days')
 
-# Function to fetch data from Jira using a filter
-def fetch_jira_issues():
-    url = f"{JIRA_URL}/rest/api/3/search?filter={JQL_FILTER_ID}"
-    try:
-        response = session.get(url, timeout=10)
-        response.raise_for_status()
-        return response.json().get("issues", [])
-    except requests.exceptions.SSLError as e:
-        print("SSL Error:", e)
-        return []
-    except requests.exceptions.RequestException as e:
-        print("Request Error:", e)
-        return []
-
-# Function to calculate KPIs
-def calculate_kpis(issues):
-    total_issues = len(issues)
-    avg_resolution_time = 0
-    resolved_issues = []
-    
-    for issue in issues:
-        fields = issue.get("fields", {})
-        if "resolutiondate" in fields:
-            created = datetime.strptime(fields["created"], "%Y-%m-%dT%H:%M:%S.%f%z")
-            resolved = datetime.strptime(fields["resolutiondate"], "%Y-%m-%dT%H:%M:%S.%f%z")
-            resolution_time = (resolved - created).total_seconds() / 3600  # Hours
-            resolved_issues.append(resolution_time)
-    
-    if resolved_issues:
-        avg_resolution_time = sum(resolved_issues) / len(resolved_issues)
-    
-    return {"Total Issues": total_issues, "Avg Resolution Time (hrs)": avg_resolution_time}
-
-# Function to save KPIs to Excel
-def save_to_excel(kpi_data):
-    df = pd.DataFrame([kpi_data])
-    df.to_excel("jira_kpi_report.xlsx", index=False)
-    print("KPI report saved to jira_kpi_report.xlsx")
-
-if __name__ == "__main__":
-    print("Fetching issues from Jira using filter...")
-    issues = fetch_jira_issues()
-    print("Input (Fetched Issues):", issues)
-    
-    if issues:
-        print("Calculating KPIs...")
-        kpi_data = calculate_kpis(issues)
-        print("Output (Calculated KPIs):", kpi_data)
-        
-        print("Saving KPIs to Excel...")
-        save_to_excel(kpi_data)
+def filter_data(df, option):
+    today = datetime.now().date()
+    if option == 'Today':
+        return df[df['Received_Date'] == today]
+    elif option == '7 Days':
+        return df[df['Received_Date'] >= today - timedelta(days=7)]
+    elif option == '30 Days':
+        return df[df['Received_Date'] >= today - timedelta(days=30)]
     else:
-        print("No issues fetched. Please check Jira filter settings.")
+        return df
+
+def filter_and_update(option):
+    filtered_df = filter_data(dataframe, option)
+    update_chart(filtered_df)
+    update_table(filtered_df)
+
+def update_chart(df):
+    for widget in chart_frame.winfo_children():
+        widget.destroy()
+
+    if df.empty:
+        return
+
+    status_counts = df['status'].value_counts()
+    labels = status_counts.index.tolist()
+    sizes = status_counts.values
+    colors = ['green' if label == 'Success' else 'red' for label in labels]
+
+    fig, ax = plt.subplots(figsize=(4, 4), facecolor='#1e1e1e')
+    wedges, texts, autotexts = ax.pie(
+        sizes,
+        labels=labels,
+        colors=colors,
+        autopct='%1.1f%%',
+        startangle=90,
+        pctdistance=0.85,
+        textprops={'color': "white"}
+    )
+    centre_circle = plt.Circle((0, 0), 0.70, fc='#1e1e1e')
+    fig.gca().add_artist(centre_circle)
+    ax.axis('equal')
+
+    canvas = FigureCanvasTkAgg(fig, master=chart_frame)
+    canvas.draw()
+    canvas.get_tk_widget().pack()
+
+def update_table(df):
+    for item in job_table.get_children():
+        job_table.delete(item)
+    for _, row in df.iterrows():
+        job_table.insert('', 'end', values=(
+            row['job_name'],
+            row['status'],
+            row['Execution_Time'],
+            row['Path'],
+            row['Received_Date']
+        ))
+
+def open_path(event):
+    selected = job_table.selection()
+    if not selected:
+        return
+    path = job_table.item(selected[0])['values'][3]
+    if path.startswith("http"):
+        webbrowser.open(path)
+    else:
+        try:
+            os.startfile(path)
+        except Exception as e:
+            print(f"Error opening path: {e}")
+
+# Layout
+# Left Filter Panel
+filter_frame = tk.Frame(root, bg="#1e1e1e")
+filter_frame.pack(side=tk.LEFT, fill=tk.Y, padx=10, pady=10)
+
+tk.Label(filter_frame, text="FILTER", fg="white", bg="#1e1e1e", font=("Arial", 14)).pack(pady=5)
+
+for label in ['Today', '7 Days', '30 Days']:
+    btn = tk.Button(filter_frame, text=label, command=lambda l=label: filter_and_update(l),
+                    bg="#333", fg="white", relief=tk.RAISED)
+    btn.pack(fill=tk.X, pady=5)
+
+load_btn = tk.Button(filter_frame, text="Load Excel", command=load_excel,
+                     bg="#444", fg="white", relief=tk.RAISED)
+load_btn.pack(fill=tk.X, pady=20)
+
+# Chart Frame
+chart_frame = tk.Frame(root, bg="#1e1e1e")
+chart_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
+# Job Table Frame
+table_frame = tk.Frame(root, bg="#1e1e1e")
+table_frame.pack(side=tk.BOTTOM, fill=tk.BOTH, expand=True)
+
+cols = ('job_name', 'status', 'Execution_Time', 'Path', 'Received_Date')
+job_table = ttk.Treeview(table_frame, columns=cols, show='headings')
+
+for col in cols:
+    job_table.heading(col, text=col)
+    job_table.column(col, anchor='w', width=200)
+
+job_table.pack(fill=tk.BOTH, expand=True)
+job_table.bind("<Double-1>", open_path)
+
+# Style
+style = ttk.Style()
+style.configure("Treeview", background="#2e2e2e", foreground="white", fieldbackground="#2e2e2e")
+style.configure("Treeview.Heading", background="#1e1e1e", foreground="white")
+
+root.mainloop()
