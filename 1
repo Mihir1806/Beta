@@ -1,40 +1,57 @@
-some specific color codes (in hexadecimal format, which is commonly used in web development and GUI styling) that align with the cleaner, more modern aesthetic we've discussed, drawing inspiration from the previous "Department Overview" image. Remember that these are suggestions, and you can adjust them to your preference.
-Color Palette Suggestions:
- * Primary Accent Color: #6C5DD3 (A soft, slightly desaturated purple - similar to the accent in the example)
-   * Alternative options: #597EF7 (Soft blue), #4CAF50 (Muted green)
- * Light Background: #F7F7FA (A very light grey, almost off-white)
-   * Alternative options: #F9FAFB, #FFFFFF (Pure white, but can sometimes feel stark)
- * Dark Text: #374151 (A dark grey, easy on the eyes)
-   * Alternative options: #1F2937 (A bit darker), #000000 (Pure black, use sparingly for main body text)
- * Subtle Border/Separator: #D1D5DB (A light grey for borders and table separators)
-   * Alternative options: #E5E7EB
- * Success Color: #4CAF50 (A standard, clear green)
-   * Light Success Background (optional): #E8F5E9 (A very light green)
- * Failure Color: #F44336 (A standard, clear red)
-   * Light Failure Background (optional): #FFEBEE (A very light red)
- * Button Background (Inactive/Default): #E5E7EB (A light grey)
- * Button Text (Default): #374151 (Dark grey, same as main text)
- * Button Background (Active/Hover - subtle): #D1D5DB (A slightly darker light grey)
-Applying Colors to UI Elements (Conceptual - Specific Code Depends on Your Library):
-1. Backgrounds:
- * Set the main window or dashboard background to the Light Background color (#F7F7FA).
- * For container elements (like the filter options area, table container, chart container), you can use the same light background or a slightly different shade if you want more visual separation (e.g., a very slightly lighter grey like #F9FAFB).
-2. Text:
- * Use the Dark Text color (#374151) for most labels, headings, and table content.
-3. Borders/Frames:
- * For subtle borders around containers, use the Subtle Border/Separator color (#D1D5DB) with a thin line width (e.g., 1 or 2 pixels).
- * For table row separators, use the same Subtle Border/Separator color with a very thin line width (e.g., 1 pixel).
-4. Buttons:
- * Set the default background of the quick filter and action buttons to Button Background (Inactive/Default) (#E5E7EB).
- * Set the text color of the buttons to Button Text (Default) (#374151).
- * Implement a subtle hover effect by changing the background color to Button Background (Active/Hover) (#D1D5DB) when the mouse cursor is over the button.
-5. Job Status Table:
- * For rows with "Success" status, you can either:
-   * Set the text color of the "STATUS" column to Success Color (#4CAF50).
-   * Set a light background color for the entire row using Light Success Background (#E8F5E9) with dark text.
- * For rows with "Failure" status, apply similar logic using Failure Color (#F44336) or Light Failure Background (#FFEBEE).
-6. Job Status Distribution Pie Chart:
- * Use the Success Color (#4CAF50) for the "Success" segment.
- * Use the Failure Color (#F44336) for the "Failure" segment.
- * For labels and percentages on the chart, use the Dark Text color (#374151).
- * For the legend, use small circles filled with the Success Color and Failure Color next to the corresponding status text in the Dark Text color.
+UI Styling Instructions
+
+1. Dark Theme Base
+	•	Set background color of the entire dashboard to: #1E1E2F
+	•	Set all text color to: #FFFFFF (or a soft white like #E0E0E0 for subtler contrast)
+
+⸻
+
+2. Button Styling
+	•	Filter Buttons (Today, 7 Days, 30 Days, Custom Range)
+	•	Background color: #2A2A3B
+	•	Hover color: #3A3A4A
+	•	Text color: #FFFFFF
+	•	Border radius: 6px
+	•	Font weight: medium or semi-bold
+
+⸻
+
+3. Job Details Table
+	•	Background: #2A2A3B
+	•	Header text: #CCCCCC
+	•	Row text: #FFFFFF
+	•	Border radius: 8px
+	•	Add some padding: padding: 12px
+
+Status Pill Colors:
+	•	Success:
+	•	Background: #1F8A70
+	•	Text: #FFFFFF
+	•	Failure:
+	•	Background: #B00020
+	•	Text: #FFFFFF
+
+⸻
+
+4. Donut Chart (Job Status Overview)
+	•	Success color: #1F8A70
+	•	Failure color: #B00020
+	•	Inner text: #FFFFFF
+	•	Background: transparent or same as dashboard background #1E1E2F
+
+⸻
+
+5. Cards & Panels
+	•	Each section (Filters, Job Overview, Job Details) should be in a card-like container:
+	•	Background: #2A2A3B
+	•	Border radius: 12px
+	•	Shadow: subtle (box-shadow: 0px 2px 5px rgba(0,0,0,0.3))
+
+⸻
+
+6. Font
+	•	Use a clean sans-serif font like 'Inter', 'Segoe UI', or 'Roboto'
+	•	Use consistent font sizes:
+	•	Title: 20px, bold
+	•	Section labels: 16px, semi-bold
+	•	Regular text: 14px
