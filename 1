@@ -1,57 +1,181 @@
-UI Styling Instructions
+import tkinter as tk
+from tkinter import ttk
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import os
+import webbrowser
+from datetime import datetime, timedelta
 
-1. Dark Theme Base
-	•	Set background color of the entire dashboard to: #1E1E2F
-	•	Set all text color to: #FFFFFF (or a soft white like #E0E0E0 for subtler contrast)
+class JobAnalyticsDashboard:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Job Analytics Dashboard")
+        self.root.configure(bg="#1E1E2F")
 
-⸻
+        # Load Excel data
+        self.data = None
+        self.load_data()
 
-2. Button Styling
-	•	Filter Buttons (Today, 7 Days, 30 Days, Custom Range)
-	•	Background color: #2A2A3B
-	•	Hover color: #3A3A4A
-	•	Text color: #FFFFFF
-	•	Border radius: 6px
-	•	Font weight: medium or semi-bold
+        # UI Styling
+        self.style = ttk.Style()
+        self.style.theme_use("clam")
 
-⸻
+        self.style.configure("RoundedButton.TButton", background="#2A2A3B", foreground="#FFFFFF", borderwidth=0, padding=8, font=("Segoe UI", 12))
+        self.style.map("RoundedButton.TButton", background=[("active", "#3A3A4A")])
 
-3. Job Details Table
-	•	Background: #2A2A3B
-	•	Header text: #CCCCCC
-	•	Row text: #FFFFFF
-	•	Border radius: 8px
-	•	Add some padding: padding: 12px
+        self.style.configure("Treeview", background="#2A2A3B", foreground="#FFFFFF", fieldbackground="#2A2A3B", bordercolor="#2A2A3B", font=("Segoe UI", 12))
+        self.style.configure("Treeview.Heading", background="#2A2A3B", foreground="#CCCCCC", font=("Segoe UI", 12, "bold"))
 
-Status Pill Colors:
-	•	Success:
-	•	Background: #1F8A70
-	•	Text: #FFFFFF
-	•	Failure:
-	•	Background: #B00020
-	•	Text: #FFFFFF
+        self.style.configure("Success.TLabel", background="#1F8A70", foreground="#FFFFFF", font=("Segoe UI", 12))
+        self.style.configure("Failure.TLabel", background="#B00020", foreground="#FFFFFF", font=("Segoe UI", 12))
 
-⸻
+        # Date Filter Frame
+        self.filter_frame = ttk.Frame(root, padding=20, style="RoundedFrame.TFrame")
+        self.filter_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
 
-4. Donut Chart (Job Status Overview)
-	•	Success color: #1F8A70
-	•	Failure color: #B00020
-	•	Inner text: #FFFFFF
-	•	Background: transparent or same as dashboard background #1E1E2F
+        self.style.configure("RoundedFrame.TFrame", background="#2A2A3B", borderwidth=0, relief="flat", bordercolor="#2A2A3B")
 
-⸻
+        ttk.Label(self.filter_frame, text="FILTER", font=("Segoe UI", 16, "bold"), foreground="#FFFFFF").grid(row=0, column=0, columnspan=2, pady=(0, 10))
 
-5. Cards & Panels
-	•	Each section (Filters, Job Overview, Job Details) should be in a card-like container:
-	•	Background: #2A2A3B
-	•	Border radius: 12px
-	•	Shadow: subtle (box-shadow: 0px 2px 5px rgba(0,0,0,0.3))
+        self.date_var = tk.StringVar(value="Today")
+        ttk.Button(self.filter_frame, text="Today", command=lambda: self.set_date_filter("Today"), style="RoundedButton.TButton").grid(row=1, column=0, sticky="w", pady=5)
+        ttk.Button(self.filter_frame, text="7 Days", command=lambda: self.set_date_filter("7 Days"), style="RoundedButton.TButton").grid(row=2, column=0, sticky="w", pady=5)
+        ttk.Button(self.filter_frame, text="30 Days", command=lambda: self.set_date_filter("30 Days"), style="RoundedButton.TButton").grid(row=3, column=0, sticky="w", pady=5)
+        ttk.Button(self.filter_frame, text="Custom Range", command=lambda: self.show_custom_range(), style="RoundedButton.TButton").grid(row=4, column=0, sticky="w", pady=5)
 
-⸻
+        self.start_date_entry = ttk.Entry(self.filter_frame)
+        self.end_date_entry = ttk.Entry(self.filter_frame)
 
-6. Font
-	•	Use a clean sans-serif font like 'Inter', 'Segoe UI', or 'Roboto'
-	•	Use consistent font sizes:
-	•	Title: 20px, bold
-	•	Section labels: 16px, semi-bold
-	•	Regular text: 14px
+        # Donut Chart Frame
+        self.chart_frame = ttk.Frame(root, padding=20, style="RoundedFrame.TFrame")
+        self.chart_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+
+        ttk.Label(self.chart_frame, text="Job Status Overview", font=("Segoe UI", 16, "bold"), foreground="#FFFFFF").pack(pady=(0, 10))
+
+        self.fig, self.ax = plt.subplots(figsize=(5, 4), facecolor="#1E1E2F")
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.chart_frame)
+        self.canvas.get_tk_widget().pack()
+
+        # Job Details Table Frame
+        self.table_frame = ttk.Frame(root, padding=20, style="RoundedFrame.TFrame")
+        self.table_frame.grid(row=1, column=1, sticky="nsew", padx=20, pady=20)
+
+        ttk.Label(self.table_frame, text="Job Details", font=("Segoe UI", 16, "bold"), foreground="#FFFFFF").pack(pady=(0, 10))
+
+        self.tree = ttk.Treeview(self.table_frame, columns=("job_name", "status", "Execution_Time", "Path", "Received_Date"), show="headings")
+        self.tree.pack(fill="both", expand=True)
+
+        self.tree.heading("job_name", text="Job Name")
+        self.tree.heading("status", text="Status")
+        self.tree.heading("Execution_Time", text="Execution Time")
+        self.tree.heading("Path", text="Path")
+        self.tree.heading("Received_Date", text="Received Date")
+
+        self.tree.column("job_name", width=150)
+        self.tree.column("status", width=80)
+        self.tree.column("Execution_Time", width=120)
+        self.tree.column("Path", width=250)
+        self.tree.column("Received_Date", width=150)
+
+        self.tree.bind("<ButtonRelease-1>", self.on_tree_click)
+
+        self.apply_filter()
+
+    def load_data(self):
+        try:
+            self.data = pd.read_excel("xyz.xlsx")
+            self.data["Received_Date"] = pd.to_datetime(self.data["Received_Date"])
+        except FileNotFoundError:
+            print("xyz.xlsx not found.")
+            self.data = pd.DataFrame()
+
+    def set_date_filter(self, filter_type):
+        self.date_var.set(filter_type)
+        self.apply_filter()
+
+    def apply_filter(self):
+        if self.data is None:
+            return
+
+        selected_filter = self.date_var.get()
+        today = datetime.now().date()
+
+        if selected_filter == "Today":
+            filtered_data = self.data[self.data["Received_Date"].dt.date == today]
+        elif selected_filter == "7 Days":
+            filtered_data = self.data[self.data["Received_Date"].dt.date >= today - timedelta(days=7)]
+        elif selected_filter == "30 Days":
+            filtered_data = self.data[self.data["Received_Date"].dt.date >= today - timedelta(days=30)]
+        elif selected_filter == "Custom":
+            try:
+                start_date = datetime.strptime(self.start_date_entry.get(), "%Y-%m-%d").date()
+                end_date = datetime.strptime(self.end_date_entry.get(), "%Y-%m-%d").date()
+                filtered_data = self.data[(self.data["Received_Date"].dt.date >= start_date) & (self.data["Received_Date"].dt.date <= end_date)]
+            except ValueError:
+                filtered_data = self.data
+
+        self.update_chart(filtered_data)
+        self.update_table(filtered_data)
+
+    def show_custom_range(self):
+        self.start_date_entry.grid(row=5, column=0, pady=5)
+        self.end_date_entry.grid(row=6, column=0, pady=5)
+
+    def update_chart(self, data):
+        success_count = len(data[data["status"] == "Success"])
+        failure_count = len(data[data["status"] == "Failure"])
+        total_count = len(data)
+
+        sizes = [success_count, failure_count]
+        labels = ["Success", "Failure"]
+        colors = ["#1F8A70", "#B00020"]
+
+        self.ax.clear()
+        wedges, texts, autotexts = self.ax.pie(sizes, labels=labels, colors=colors, autopct="%1.1f%%", startangle=140, wedgeprops=dict(width=0.4))
+        self.ax.set_title("Job Status", color="#FFFFFF")
+        self.ax.set_facecolor("#1E1E2F")
+        self.fig.set_facecolor("#1E1E2F")
+
+        for text in texts + autotexts:
+            text.set_color("#FFFFFF")
+
+        self.canvas.draw()
+
+        def on_click(event):
+            if event.inaxes == self.ax:
+                for i, wedge in enumerate(wedges):
+                    if wedge.contains_point((event.x, event.y)):
+                        if labels[i] == "Success":
+                            self.update_table(data[data["status"] == "Success"])
+                        elif labels[i] == "Failure":
+                            self.update_table(data[data["status"] == "Failure"])
+                        break
+
+        self.fig.canvas.mpl_connect("button_press_event", on_click)
+
+    def update_table(self, data):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        for index, row in data.iterrows():
+            self.tree.insert("", "end", values=(row["job_name"], row["status"], row["Execution_Time"], row["Path"], row["Received_Date"].strftime("%Y-%m-%d %H:%M:%S")))
+
+    def on_tree_click(self, event):
+        item = self.tree.identify("item", event.x, event.y)
+        if item:
+            column = self.tree.identify_column(event.x)
+            if column == "#4":
+                path = self.tree.item(item, "values")[3]
+                if path.startswith("http://") or path.startswith("https://"):
+                    webbrowser.open_new_tab(path)
+                elif path:
+                    try:
+                        os.startfile(path)
+                    except OSError:
+                        print(f"Cannot open file: {path}")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = JobAnalyticsDashboard(root)
+    root.mainloop()
