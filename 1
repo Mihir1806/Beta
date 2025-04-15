@@ -1,181 +1,139 @@
-import tkinter as tk
-from tkinter import ttk
+import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import os
+import datetime
 import webbrowser
-from datetime import datetime, timedelta
+from datetime import timedelta
 
-class JobAnalyticsDashboard:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Job Analytics Dashboard")
-        self.root.configure(bg="#1E1E2F")
+# Load data from Excel
+@st.cache_data
+def load_data():
+    return pd.read_excel("job_status_report.xlsx")
 
-        # Load Excel data
-        self.data = None
-        self.load_data()
+df = load_data()
+df['Received_Date'] = pd.to_datetime(df['Received_Date']).dt.date  # Ensure date format
 
-        # UI Styling
-        self.style = ttk.Style()
-        self.style.theme_use("clam")
+# --- Widget UI ---
+st.set_page_config(layout="wide")
+st.title("📊 Job Analytics Dashboard")
 
-        self.style.configure("RoundedButton.TButton", background="#2A2A3B", foreground="#FFFFFF", borderwidth=0, padding=8, font=("Segoe UI", 12))
-        self.style.map("RoundedButton.TButton", background=[("active", "#3A3A4A")])
+# --- Sidebar Filters ---
+with st.sidebar:
+    st.header("Filters")
+    date_filter = st.radio("Date Range", ["Today", "7 Days", "30 Days", "Custom Range"])
+    
+    if date_filter == "Custom Range":
+        start_date = st.date_input("Start Date", datetime.date.today() - timedelta(days=30))
+        end_date = st.date_input("End Date", datetime.date.today())
+    else:
+        start_date, end_date = None, None
 
-        self.style.configure("Treeview", background="#2A2A3B", foreground="#FFFFFF", fieldbackground="#2A2A3B", bordercolor="#2A2A3B", font=("Segoe UI", 12))
-        self.style.configure("Treeview.Heading", background="#2A2A3B", foreground="#CCCCCC", font=("Segoe UI", 12, "bold"))
+# Apply date filter
+today = datetime.date.today()
+filtered_df = df.copy()
 
-        self.style.configure("Success.TLabel", background="#1F8A70", foreground="#FFFFFF", font=("Segoe UI", 12))
-        self.style.configure("Failure.TLabel", background="#B00020", foreground="#FFFFFF", font=("Segoe UI", 12))
+if date_filter == "Today":
+    filtered_df = df[df['Received_Date'] == today]
+elif date_filter == "7 Days":
+    filtered_df = df[df['Received_Date'] >= today - timedelta(days=7)]
+elif date_filter == "30 Days":
+    filtered_df = df[df['Received_Date'] >= today - timedelta(days=30)]
+elif date_filter == "Custom Range" and start_date and end_date:
+    filtered_df = df[(df['Received_Date'] >= start_date) & (df['Received_Date'] <= end_date)]
 
-        # Date Filter Frame
-        self.filter_frame = ttk.Frame(root, padding=20, style="RoundedFrame.TFrame")
-        self.filter_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
+# --- Status Summary Widget ---
+st.subheader("Job Status Overview")
+success_count = len(filtered_df[filtered_df['Status'] == 'Success'])
+failure_count = len(filtered_df[filtered_df['Status'] == 'Failure'])
+total_count = len(filtered_df)
 
-        self.style.configure("RoundedFrame.TFrame", background="#2A2A3B", borderwidth=0, relief="flat", bordercolor="#2A2A3B")
+# Create columns for the status widgets
+col1, col2, col3 = st.columns(3)
 
-        ttk.Label(self.filter_frame, text="FILTER", font=("Segoe UI", 16, "bold"), foreground="#FFFFFF").grid(row=0, column=0, columnspan=2, pady=(0, 10))
+# Success Widget
+with col1:
+    st.markdown(f"""
+    <div style='background-color: #4CAF50; padding: 20px; border-radius: 10px; text-align: center; color: white;'>
+        <h3>Success</h3>
+        <h2>{success_count}</h2>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("View Success Jobs", key="success"):
+        filtered_df = filtered_df[filtered_df['Status'] == 'Success']
 
-        self.date_var = tk.StringVar(value="Today")
-        ttk.Button(self.filter_frame, text="Today", command=lambda: self.set_date_filter("Today"), style="RoundedButton.TButton").grid(row=1, column=0, sticky="w", pady=5)
-        ttk.Button(self.filter_frame, text="7 Days", command=lambda: self.set_date_filter("7 Days"), style="RoundedButton.TButton").grid(row=2, column=0, sticky="w", pady=5)
-        ttk.Button(self.filter_frame, text="30 Days", command=lambda: self.set_date_filter("30 Days"), style="RoundedButton.TButton").grid(row=3, column=0, sticky="w", pady=5)
-        ttk.Button(self.filter_frame, text="Custom Range", command=lambda: self.show_custom_range(), style="RoundedButton.TButton").grid(row=4, column=0, sticky="w", pady=5)
+# Failure Widget
+with col2:
+    st.markdown(f"""
+    <div style='background-color: #F44336; padding: 20px; border-radius: 10px; text-align: center; color: white;'>
+        <h3>Failure</h3>
+        <h2>{failure_count}</h2>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("View Failure Jobs", key="failure"):
+        filtered_df = filtered_df[filtered_df['Status'] == 'Failure']
 
-        self.start_date_entry = ttk.Entry(self.filter_frame)
-        self.end_date_entry = ttk.Entry(self.filter_frame)
+# Total Widget
+with col3:
+    st.markdown(f"""
+    <div style='background-color: #2196F3; padding: 20px; border-radius: 10px; text-align: center; color: white;'>
+        <h3>Total</h3>
+        <h2>{total_count}</h2>
+    </div>
+    """, unsafe_allow_html=True)
+    if st.button("View All Jobs", key="total"):
+        filtered_df = filtered_df  # Reset filter
 
-        # Donut Chart Frame
-        self.chart_frame = ttk.Frame(root, padding=20, style="RoundedFrame.TFrame")
-        self.chart_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
+# --- Job Details Table ---
+st.subheader("Job Details")
 
-        ttk.Label(self.chart_frame, text="Job Status Overview", font=("Segoe UI", 16, "bold"), foreground="#FFFFFF").pack(pady=(0, 10))
+# Convert 'Path' to clickable hyperlinks
+def make_clickable(path):
+    if pd.notna(path):
+        if path.startswith(('http:', 'https:')):  # SharePoint/URL
+            return f'<a href="{path}" target="_blank" style="color: #2196F3;">🔗 Open</a>'
+        else:  # Local path
+            return f'<a href="file:///{path}" target="_blank" style="color: #2196F3;">🔗 Open</a>'
+    return "N/A"
 
-        self.fig, self.ax = plt.subplots(figsize=(5, 4), facecolor="#1E1E2F")
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.chart_frame)
-        self.canvas.get_tk_widget().pack()
+filtered_df['Path'] = filtered_df['Path'].apply(make_clickable)
 
-        # Job Details Table Frame
-        self.table_frame = ttk.Frame(root, padding=20, style="RoundedFrame.TFrame")
-        self.table_frame.grid(row=1, column=1, sticky="nsew", padx=20, pady=20)
+# Display styled table
+st.write(
+    filtered_df[['Job_Name', 'Status', 'Execution_Time', 'Path']].to_html(
+        escape=False, 
+        index=False,
+        classes='styled-table',
+        justify='left'
+    ),
+    unsafe_allow_html=True
+)
 
-        ttk.Label(self.table_frame, text="Job Details", font=("Segoe UI", 16, "bold"), foreground="#FFFFFF").pack(pady=(0, 10))
-
-        self.tree = ttk.Treeview(self.table_frame, columns=("job_name", "status", "Execution_Time", "Path", "Received_Date"), show="headings")
-        self.tree.pack(fill="both", expand=True)
-
-        self.tree.heading("job_name", text="Job Name")
-        self.tree.heading("status", text="Status")
-        self.tree.heading("Execution_Time", text="Execution Time")
-        self.tree.heading("Path", text="Path")
-        self.tree.heading("Received_Date", text="Received Date")
-
-        self.tree.column("job_name", width=150)
-        self.tree.column("status", width=80)
-        self.tree.column("Execution_Time", width=120)
-        self.tree.column("Path", width=250)
-        self.tree.column("Received_Date", width=150)
-
-        self.tree.bind("<ButtonRelease-1>", self.on_tree_click)
-
-        self.apply_filter()
-
-    def load_data(self):
-        try:
-            self.data = pd.read_excel("xyz.xlsx")
-            self.data["Received_Date"] = pd.to_datetime(self.data["Received_Date"])
-        except FileNotFoundError:
-            print("xyz.xlsx not found.")
-            self.data = pd.DataFrame()
-
-    def set_date_filter(self, filter_type):
-        self.date_var.set(filter_type)
-        self.apply_filter()
-
-    def apply_filter(self):
-        if self.data is None:
-            return
-
-        selected_filter = self.date_var.get()
-        today = datetime.now().date()
-
-        if selected_filter == "Today":
-            filtered_data = self.data[self.data["Received_Date"].dt.date == today]
-        elif selected_filter == "7 Days":
-            filtered_data = self.data[self.data["Received_Date"].dt.date >= today - timedelta(days=7)]
-        elif selected_filter == "30 Days":
-            filtered_data = self.data[self.data["Received_Date"].dt.date >= today - timedelta(days=30)]
-        elif selected_filter == "Custom":
-            try:
-                start_date = datetime.strptime(self.start_date_entry.get(), "%Y-%m-%d").date()
-                end_date = datetime.strptime(self.end_date_entry.get(), "%Y-%m-%d").date()
-                filtered_data = self.data[(self.data["Received_Date"].dt.date >= start_date) & (self.data["Received_Date"].dt.date <= end_date)]
-            except ValueError:
-                filtered_data = self.data
-
-        self.update_chart(filtered_data)
-        self.update_table(filtered_data)
-
-    def show_custom_range(self):
-        self.start_date_entry.grid(row=5, column=0, pady=5)
-        self.end_date_entry.grid(row=6, column=0, pady=5)
-
-    def update_chart(self, data):
-        success_count = len(data[data["status"] == "Success"])
-        failure_count = len(data[data["status"] == "Failure"])
-        total_count = len(data)
-
-        sizes = [success_count, failure_count]
-        labels = ["Success", "Failure"]
-        colors = ["#1F8A70", "#B00020"]
-
-        self.ax.clear()
-        wedges, texts, autotexts = self.ax.pie(sizes, labels=labels, colors=colors, autopct="%1.1f%%", startangle=140, wedgeprops=dict(width=0.4))
-        self.ax.set_title("Job Status", color="#FFFFFF")
-        self.ax.set_facecolor("#1E1E2F")
-        self.fig.set_facecolor("#1E1E2F")
-
-        for text in texts + autotexts:
-            text.set_color("#FFFFFF")
-
-        self.canvas.draw()
-
-        def on_click(event):
-            if event.inaxes == self.ax:
-                for i, wedge in enumerate(wedges):
-                    if wedge.contains_point((event.x, event.y)):
-                        if labels[i] == "Success":
-                            self.update_table(data[data["status"] == "Success"])
-                        elif labels[i] == "Failure":
-                            self.update_table(data[data["status"] == "Failure"])
-                        break
-
-        self.fig.canvas.mpl_connect("button_press_event", on_click)
-
-    def update_table(self, data):
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-
-        for index, row in data.iterrows():
-            self.tree.insert("", "end", values=(row["job_name"], row["status"], row["Execution_Time"], row["Path"], row["Received_Date"].strftime("%Y-%m-%d %H:%M:%S")))
-
-    def on_tree_click(self, event):
-        item = self.tree.identify("item", event.x, event.y)
-        if item:
-            column = self.tree.identify_column(event.x)
-            if column == "#4":
-                path = self.tree.item(item, "values")[3]
-                if path.startswith("http://") or path.startswith("https://"):
-                    webbrowser.open_new_tab(path)
-                elif path:
-                    try:
-                        os.startfile(path)
-                    except OSError:
-                        print(f"Cannot open file: {path}")
-
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = JobAnalyticsDashboard(root)
-    root.mainloop()
+# Add CSS for table styling
+st.markdown("""
+<style>
+.styled-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 25px 0;
+    font-size: 0.9em;
+    font-family: sans-serif;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.15);
+}
+.styled-table thead tr {
+    background-color: #2196F3;
+    color: white;
+    text-align: left;
+}
+.styled-table th, .styled-table td {
+    padding: 12px 15px;
+}
+.styled-table tbody tr {
+    border-bottom: 1px solid #dddddd;
+}
+.styled-table tbody tr:nth-of-type(even) {
+    background-color: #f3f3f3;
+}
+.styled-table tbody tr:last-of-type {
+    border-bottom: 2px solid #2196F3;
+}
+</style>
+""", unsafe_allow_html=True)
