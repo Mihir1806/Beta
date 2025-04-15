@@ -1,62 +1,40 @@
-1. Clean, Modern UI Design
-	•	Minimalist layout: Use whitespace strategically to avoid clutter.
-	•	Rounded corners and soft shadows for cards and buttons.
-	•	Flat or neumorphic design depending on the vibe (neumorphism feels more playful, flat feels sleek and modern).
-
-2. Visual Hierarchy
-	•	Bold headers with large, modern fonts.
-	•	Contrasting color highlights for key stats or alerts.
-	•	Subtle dividers and typography to separate sections without overwhelming the eye.
-
-3. Interactive & Animated Elements
-	•	Hover effects on widgets and graphs.
-	•	Micro-interactions (e.g., smooth transitions when switching tabs or filtering data).
-	•	Use Framer Motion or GSAP for smooth UI animations.
-
-4. Data Visualization
-	•	Use vibrant, but accessible color palettes.
-	•	Interactive charts (hover to reveal values, zoom, etc.).
-	•	Donut charts, line graphs, heatmaps, or even animated counters to make data more dynamic.
-
-5. Personalization/Customization
-	•	Allow theme switching (e.g., light/dark mode).
-	•	Let users pin or rearrange widgets.
-
-6. Smart Use of Icons & Avatars
-	•	Incorporate clean icons (Lucide, Feather, Material Icons).
-	•	Show user avatars, app logos, or profile cards with subtle animations.
-
-7. Typography & Color
-	•	Use a cool font combo (e.g., Montserrat for headings, Inter for body).
-	•	Stick to 2-3 main colors with complementary accents.
-
-8. Subtle Background Patterns or Gradients
-	•	Use blurry gradients, abstract shapes, or soft textures to break monotony.
-
-
-
-Feature Quality & Monitoring
-	•	Data quality metrics (null values %, distributions, outliers)
-	•	Drift detection (if values change over time)
-	•	Missing data trends
-	•	Validation checks / alerts
-
-
-
-
-
-
-
-1.	‘As of Today’ – Display only the records where recived_date is equal to the current date.
-2.	‘Custom Range’ – Allow the user to select a start and end date, and display records where recived_date falls within that range (inclusive).”**
-Reset Button:
-	•	A “Clear Filters” button to reset all filters and show full data.
-
-
-
-Use a dual-gradient color scheme in the graph—green (from dark to light) to represent success, and red (from dark to light) to represent failure.
-Background -Dark Navy Blue (#0E1A2B to #1A2235)
-frame of job status distribution and job details as Slightly lighter dark blue (#1C2942, #2A3A5B)
-
-
-
+some specific color codes (in hexadecimal format, which is commonly used in web development and GUI styling) that align with the cleaner, more modern aesthetic we've discussed, drawing inspiration from the previous "Department Overview" image. Remember that these are suggestions, and you can adjust them to your preference.
+Color Palette Suggestions:
+ * Primary Accent Color: #6C5DD3 (A soft, slightly desaturated purple - similar to the accent in the example)
+   * Alternative options: #597EF7 (Soft blue), #4CAF50 (Muted green)
+ * Light Background: #F7F7FA (A very light grey, almost off-white)
+   * Alternative options: #F9FAFB, #FFFFFF (Pure white, but can sometimes feel stark)
+ * Dark Text: #374151 (A dark grey, easy on the eyes)
+   * Alternative options: #1F2937 (A bit darker), #000000 (Pure black, use sparingly for main body text)
+ * Subtle Border/Separator: #D1D5DB (A light grey for borders and table separators)
+   * Alternative options: #E5E7EB
+ * Success Color: #4CAF50 (A standard, clear green)
+   * Light Success Background (optional): #E8F5E9 (A very light green)
+ * Failure Color: #F44336 (A standard, clear red)
+   * Light Failure Background (optional): #FFEBEE (A very light red)
+ * Button Background (Inactive/Default): #E5E7EB (A light grey)
+ * Button Text (Default): #374151 (Dark grey, same as main text)
+ * Button Background (Active/Hover - subtle): #D1D5DB (A slightly darker light grey)
+Applying Colors to UI Elements (Conceptual - Specific Code Depends on Your Library):
+1. Backgrounds:
+ * Set the main window or dashboard background to the Light Background color (#F7F7FA).
+ * For container elements (like the filter options area, table container, chart container), you can use the same light background or a slightly different shade if you want more visual separation (e.g., a very slightly lighter grey like #F9FAFB).
+2. Text:
+ * Use the Dark Text color (#374151) for most labels, headings, and table content.
+3. Borders/Frames:
+ * For subtle borders around containers, use the Subtle Border/Separator color (#D1D5DB) with a thin line width (e.g., 1 or 2 pixels).
+ * For table row separators, use the same Subtle Border/Separator color with a very thin line width (e.g., 1 pixel).
+4. Buttons:
+ * Set the default background of the quick filter and action buttons to Button Background (Inactive/Default) (#E5E7EB).
+ * Set the text color of the buttons to Button Text (Default) (#374151).
+ * Implement a subtle hover effect by changing the background color to Button Background (Active/Hover) (#D1D5DB) when the mouse cursor is over the button.
+5. Job Status Table:
+ * For rows with "Success" status, you can either:
+   * Set the text color of the "STATUS" column to Success Color (#4CAF50).
+   * Set a light background color for the entire row using Light Success Background (#E8F5E9) with dark text.
+ * For rows with "Failure" status, apply similar logic using Failure Color (#F44336) or Light Failure Background (#FFEBEE).
+6. Job Status Distribution Pie Chart:
+ * Use the Success Color (#4CAF50) for the "Success" segment.
+ * Use the Failure Color (#F44336) for the "Failure" segment.
+ * For labels and percentages on the chart, use the Dark Text color (#374151).
+ * For the legend, use small circles filled with the Success Color and Failure Color next to the corresponding status text in the Dark Text color.
