@@ -7,6 +7,7 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import os
 import webbrowser
 from datetime import datetime, timedelta
+from PIL import Image, ImageTk
 
 class JobAnalyticsDashboard:
     def __init__(self, root):
@@ -20,10 +21,10 @@ class JobAnalyticsDashboard:
 
         # UI Styling
         self.style = ttk.Style()
-        self.style.theme_use("clam")  # Use clam theme as a base for custom styling
+        self.style.theme_use("clam")
 
-        self.style.configure("TButton", background="#2A2A3B", foreground="#FFFFFF", borderwidth=0, padding=8, font=("Segoe UI", 12))
-        self.style.map("TButton", background=[("active", "#3A3A4A")])
+        self.style.configure("RoundedButton.TButton", background="#2A2A3B", foreground="#FFFFFF", borderwidth=0, padding=8, font=("Segoe UI", 12))
+        self.style.map("RoundedButton.TButton", background=[("active", "#3A3A4A")])
 
         self.style.configure("Treeview", background="#2A2A3B", foreground="#FFFFFF", fieldbackground="#2A2A3B", bordercolor="#2A2A3B", font=("Segoe UI", 12))
         self.style.configure("Treeview.Heading", background="#2A2A3B", foreground="#CCCCCC", font=("Segoe UI", 12, "bold"))
@@ -32,23 +33,23 @@ class JobAnalyticsDashboard:
         self.style.configure("Failure.TLabel", background="#B00020", foreground="#FFFFFF", font=("Segoe UI", 12))
 
         # Date Filter Frame
-        self.filter_frame = ttk.Frame(root, padding=20)
-        self.filter_frame.grid(row=0, column=0, sticky="nsew")
+        self.filter_frame = self.create_rounded_frame(root, "#2A2A3B", padding=20)
+        self.filter_frame.grid(row=0, column=0, sticky="nsew", padx=20, pady=20)
 
         ttk.Label(self.filter_frame, text="FILTER", font=("Segoe UI", 16, "bold"), foreground="#FFFFFF").grid(row=0, column=0, columnspan=2, pady=(0, 10))
 
         self.date_var = tk.StringVar(value="Today")
-        ttk.Radiobutton(self.filter_frame, text="Today", variable=self.date_var, value="Today", command=self.apply_filter).grid(row=1, column=0, sticky="w", pady=5)
-        ttk.Radiobutton(self.filter_frame, text="7 Days", variable=self.date_var, value="7 Days", command=self.apply_filter).grid(row=2, column=0, sticky="w", pady=5)
-        ttk.Radiobutton(self.filter_frame, text="30 Days", variable=self.date_var, value="30 Days", command=self.apply_filter).grid(row=3, column=0, sticky="w", pady=5)
-        ttk.Radiobutton(self.filter_frame, text="Custom Range", variable=self.date_var, value="Custom", command=self.show_custom_range).grid(row=4, column=0, sticky="w", pady=5)
+        self.create_rounded_button(self.filter_frame, "Today", lambda: self.set_date_filter("Today")).grid(row=1, column=0, sticky="w", pady=5)
+        self.create_rounded_button(self.filter_frame, "7 Days", lambda: self.set_date_filter("7 Days")).grid(row=2, column=0, sticky="w", pady=5)
+        self.create_rounded_button(self.filter_frame, "30 Days", lambda: self.set_date_filter("30 Days")).grid(row=3, column=0, sticky="w", pady=5)
+        self.create_rounded_button(self.filter_frame, "Custom Range", lambda: self.show_custom_range()).grid(row=4, column=0, sticky="w", pady=5)
 
         self.start_date_entry = ttk.Entry(self.filter_frame)
         self.end_date_entry = ttk.Entry(self.filter_frame)
 
         # Donut Chart Frame
-        self.chart_frame = ttk.Frame(root, padding=20)
-        self.chart_frame.grid(row=0, column=1, sticky="nsew")
+        self.chart_frame = self.create_rounded_frame(root, "#2A2A3B", padding=20)
+        self.chart_frame.grid(row=0, column=1, sticky="nsew", padx=20, pady=20)
 
         ttk.Label(self.chart_frame, text="Job Status Overview", font=("Segoe UI", 16, "bold"), foreground="#FFFFFF").pack(pady=(0, 10))
 
@@ -57,8 +58,8 @@ class JobAnalyticsDashboard:
         self.canvas.get_tk_widget().pack()
 
         # Job Details Table Frame
-        self.table_frame = ttk.Frame(root, padding=20)
-        self.table_frame.grid(row=1, column=1, sticky="nsew")
+        self.table_frame = self.create_rounded_frame(root, "#2A2A3B", padding=20)
+        self.table_frame.grid(row=1, column=1, sticky="nsew", padx=20, pady=20)
 
         ttk.Label(self.table_frame, text="Job Details", font=("Segoe UI", 16, "bold"), foreground="#FFFFFF").pack(pady=(0, 10))
 
@@ -85,9 +86,14 @@ class JobAnalyticsDashboard:
         try:
             self.data = pd.read_excel("xyz.xlsx")
             self.data["Received_Date"] = pd.to_datetime(self.data["Received_Date"])
+            self.data["Path"] = self.data["Path"].fillna("")
         except FileNotFoundError:
             print("xyz.xlsx not found.")
             self.data = pd.DataFrame()
+
+    def set_date_filter(self, filter_type):
+        self.date_var.set(filter_type)
+        self.apply_filter()
 
     def apply_filter(self):
         if self.data is None:
@@ -108,7 +114,7 @@ class JobAnalyticsDashboard:
                 end_date = datetime.strptime(self.end_date_entry.get(), "%Y-%m-%d").date()
                 filtered_data = self.data[(self.data["Received_Date"].dt.date >= start_date) & (self.data["Received_Date"].dt.date <= end_date)]
             except ValueError:
-                filtered_data = self.data  # Show all if custom dates are invalid
+                filtered_data = self.data
 
         self.update_chart(filtered_data)
         self.update_table(filtered_data)
@@ -160,15 +166,25 @@ class JobAnalyticsDashboard:
         item = self.tree.identify("item", event.x, event.y)
         if item:
             column = self.tree.identify_column(event.x)
-            if column == "#4":  # Path column
+            if column == "#4":
                 path = self.tree.item(item, "values")[3]
                 if path.startswith("http://") or path.startswith("https://"):
                     webbrowser.open_new_tab(path)
-                else:
+                elif path:
                     try:
                         os.startfile(path)
                     except OSError:
                         print(f"Cannot open file: {path}")
+
+    def create_rounded_frame(self, parent, bg_color, padding=10):
+        frame = ttk.Frame(parent, padding=padding)
+        frame.configure(style="RoundedFrame.TFrame", background=bg_color)
+        self.style.configure("RoundedFrame.TFrame", background=bg_color, borderwidth=0, relief="flat", bordercolor=bg_color)
+        return frame
+
+    def create_rounded_button(self, parent, text, command):
+        button = ttk.Button(parent, text=text, command=command, style="RoundedButton.TButton")
+        return button
 
 if __name__ == "__main__":
     root = tk.Tk()
