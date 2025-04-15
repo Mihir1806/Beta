@@ -1,24 +1,209 @@
-Color-Coding of Job Status:
-   * Clearly indicate the status of each job in the table using distinct colors. For example, 'Success' could be displayed in green, 'Failure' in red, and potentially other statuses (if they exist) in different appropriate colors (e.g., 'Running' in blue, 'Pending' in yellow).
-   * Provide code on how to dynamically change the text or background color of the status cells in the table based on their value.
- * Improved Look and Description of the Pie Chart:
-   * Make the 'Job Status Distribution' pie chart more visually appealing. This could involve:
-     * Adding more distinct and visually pleasing colors for the 'Success' and 'Failure' segments.
-     * Displaying percentages or actual counts directly on the slices of the pie chart or as labels next to them.
-     * Adding a clear legend that maps the colors to the job statuses.
-   * Provide code on how to customize the appearance of the pie chart using a Python plotting library (like Matplotlib or Plotly, assuming one is being used or can be integrated). If a GUI library has built-in charting capabilities, focus on those.
- * Enhanced Filter Options:
-   * Make the 'Filter Options' section more visually organized. This could involve:
-     * Using a more visually distinct style for the buttons ('Today', '7 Days', '30 Days').
-     * Improving the appearance of the 'Custom Date Range' input fields (e.g., better borders, clear labels).
-     * Making the 'Apply Date Range' and 'Reset Filters' buttons more prominent.
-   * Provide code snippets on how to style these UI elements using the chosen Python GUI library.
- * General Layout and Styling:
-   * Suggest improvements to the overall layout and visual consistency of the dashboard. This could include:
-     * Using consistent fonts and color schemes throughout the application.
-     * Adding subtle borders or spacing to visually separate different sections of the dashboard.
-     * Ensuring that text is easily readable.
-   * Provide general guidance on how to manage the layout and apply styling within the chosen Python GUI library.
-Important Constraints:
- * Do not change any of the underlying functionality or data processing logic. The goal is purely visual enhancement.
- * All modifications must be implemented using Python. Do not suggest solutions that involve other programming languages or external tools beyond Python libraries.
+import tkinter as tk
+from tkinter import ttk, filedialog, messagebox
+import pandas as pd
+from datetime import datetime, timedelta
+import webbrowser
+import os
+
+class JobDashboard:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Job Analytics Dashboard")
+        self.root.geometry("1000x700")
+        self.root.configure(bg='#f0f2f5')
+
+        self.df = self.load_excel_data()
+        if self.df is None:
+            return
+
+        self.df['Received_Date'] = pd.to_datetime(self.df['Received_Date']).dt.date
+        self.filtered_df = self.df.copy()
+
+        self.configure_styles()
+        self.create_header()
+        self.create_filters()
+        self.create_status_overview()
+        self.create_job_table()
+
+    def load_excel_data(self):
+        try:
+            df = pd.read_excel("job_status_report.xlsx")
+            required_columns = ['Job_Name', 'Status', 'Execution_Time', 'Path', 'Received_Date']
+            if not all(col in df.columns for col in required_columns):
+                messagebox.showerror("Error", "Excel file missing required columns!")
+                return None
+            return df
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load Excel file:\n{str(e)}")
+            return None
+
+    def configure_styles(self):
+        style = ttk.Style()
+        style.theme_use('clam')
+        style.configure('TFrame', background='#f0f2f5')
+        style.configure('Header.TFrame', background='#2c3e50')
+        style.configure('Filter.TFrame', background='#ffffff', relief=tk.RAISED, borderwidth=1)
+        style.configure('Status.TFrame', background='#ffffff', relief=tk.RAISED, borderwidth=1)
+        style.configure('Table.TFrame', background='#ffffff', relief=tk.RAISED, borderwidth=1)
+
+        style.configure('Filter.TButton', font=('Segoe UI', 9), padding=5)
+        style.configure('Success.TButton', background='#4CAF50', foreground='white')
+        style.configure('Failure.TButton', background='#F44336', foreground='white')
+        style.configure('Total.TButton', background='#2196F3', foreground='white')
+
+        style.configure('Title.TLabel', font=('Segoe UI', 16, 'bold'), background='#2c3e50', foreground='white')
+        style.configure('Section.TLabel', font=('Segoe UI', 12, 'bold'), background='#ffffff', foreground='#2c3e50')
+
+    def create_header(self):
+        header_frame = ttk.Frame(self.root, style='Header.TFrame')
+        header_frame.pack(fill=tk.X, padx=10, pady=(10, 0))
+        ttk.Label(header_frame, text="Job Analytics Dashboard", style='Title.TLabel').pack(side=tk.LEFT, padx=10)
+
+    def create_filters(self):
+        filter_frame = ttk.Frame(self.root, style='Filter.TFrame')
+        filter_frame.pack(fill=tk.X, padx=10, pady=10)
+
+        ttk.Label(filter_frame, text="FILTER", font=('Segoe UI', 10, 'bold')).pack(side=tk.LEFT, padx=10)
+
+        ttk.Button(filter_frame, text="Today", style='Filter.TButton', command=lambda: self.filter_dates(0)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(filter_frame, text="7 Days", style='Filter.TButton', command=lambda: self.filter_dates(7)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(filter_frame, text="30 Days", style='Filter.TButton', command=lambda: self.filter_dates(30)).pack(side=tk.LEFT, padx=5)
+
+        ttk.Label(filter_frame, text="Custom Range").pack(side=tk.LEFT, padx=(20, 5))
+
+        self.start_entry = ttk.Entry(filter_frame, width=10)
+        self.start_entry.pack(side=tk.LEFT, padx=5)
+        ttk.Label(filter_frame, text="to").pack(side=tk.LEFT)
+        self.end_entry = ttk.Entry(filter_frame, width=10)
+        self.end_entry.pack(side=tk.LEFT, padx=5)
+        ttk.Button(filter_frame, text="Apply", command=self.apply_custom_range).pack(side=tk.LEFT)
+
+    def create_status_overview(self):
+        status_frame = ttk.Frame(self.root, style='Status.TFrame')
+        status_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        ttk.Label(status_frame, text="Job Status Overview", style='Section.TLabel').pack(anchor=tk.W, padx=10, pady=5)
+        inner_frame = ttk.Frame(status_frame)
+        inner_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
+
+        self.success_frame = self.create_status_box(inner_frame, "Success", "#4CAF50")
+        self.failure_frame = self.create_status_box(inner_frame, "Failure", "#F44336")
+        self.total_frame = self.create_status_box(inner_frame, "Total", "#2196F3")
+
+        for frame, status in [(self.success_frame, "Success"), (self.failure_frame, "Failure"), (self.total_frame, "Total")]:
+            frame.bind("<Button-1>", lambda e, s=status: self.filter_status(s))
+            for child in frame.winfo_children():
+                child.bind("<Button-1>", lambda e, s=status: self.filter_status(s))
+
+        self.update_status_counts()
+
+    def create_status_box(self, parent, label, color):
+        frame = tk.Frame(parent, bg=color, width=150, height=60)
+        frame.pack_propagate(False)
+        frame.pack(side=tk.LEFT, padx=5, ipadx=10, ipady=10)
+
+        tk.Label(frame, text=label, bg=color, fg="white", font=('Segoe UI', 10, 'bold')).pack()
+        label_var = tk.Label(frame, text="0", bg=color, fg="white", font=('Segoe UI', 14, 'bold'))
+        label_var.pack()
+
+        setattr(self, f"{label.lower()}_count", label_var)
+        return frame
+
+    def create_job_table(self):
+        table_frame = ttk.Frame(self.root, style='Table.TFrame')
+        table_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+
+        ttk.Label(table_frame, text="Job Details", style='Section.TLabel').pack(anchor=tk.W, padx=10, pady=5)
+
+        self.tree = ttk.Treeview(table_frame, columns=("Job_Name", "Status", "Execution_Time", "Path", "Received_Date"),
+                                 show="headings", selectmode="browse")
+
+        columns = {
+            "Job_Name": {"text": "JOB NAME", "width": 200},
+            "Status": {"text": "STATUS", "width": 80},
+            "Execution_Time": {"text": "EXECUTION TIME", "width": 130},
+            "Path": {"text": "PATH", "width": 300},
+            "Received_Date": {"text": "RECEIVED DATE", "width": 120},
+        }
+
+        for col, config in columns.items():
+            self.tree.heading(col, text=config["text"])
+            self.tree.column(col, width=config["width"])
+
+        scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.tree.yview)
+        self.tree.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
+
+        self.tree.bind("<Double-1>", self.open_path)
+        self.update_table()
+
+    def filter_dates(self, days):
+        today = datetime.now().date()
+        if days > 0:
+            start_date = today - timedelta(days=days)
+            self.filtered_df = self.df[self.df['Received_Date'] >= start_date]
+        else:
+            self.filtered_df = self.df[self.df['Received_Date'] == today]
+        self.update_display()
+
+    def apply_custom_range(self):
+        try:
+            start_date = datetime.strptime(self.start_entry.get(), "%Y-%m-%d").date()
+            end_date = datetime.strptime(self.end_entry.get(), "%Y-%m-%d").date()
+            self.filtered_df = self.df[(self.df['Received_Date'] >= start_date) &
+                                       (self.df['Received_Date'] <= end_date)]
+            self.update_display()
+        except ValueError:
+            messagebox.showerror("Error", "Invalid date format! Use YYYY-MM-DD")
+
+    def filter_status(self, status):
+        if status == "Total":
+            self.filtered_df = self.df.copy()
+        else:
+            self.filtered_df = self.df[self.df['Status'] == status]
+        self.update_display()
+
+    def update_display(self):
+        self.update_status_counts()
+        self.update_table()
+
+    def update_status_counts(self):
+        success = len(self.filtered_df[self.filtered_df['Status'] == 'Success'])
+        failure = len(self.filtered_df[self.filtered_df['Status'] == 'Failure'])
+        total = len(self.filtered_df)
+
+        self.success_count.config(text=str(success))
+        self.failure_count.config(text=str(failure))
+        self.total_count.config(text=str(total))
+
+    def update_table(self):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        for _, row in self.filtered_df.iterrows():
+            self.tree.insert("", tk.END, values=(
+                row['Job_Name'],
+                row['Status'],
+                row['Execution_Time'],
+                row['Path'],
+                row['Received_Date']
+            ))
+
+    def open_path(self, event):
+        item = self.tree.selection()
+        if item:
+            path = self.tree.item(item, "values")[3]
+            if pd.notna(path):
+                if path.startswith(('http:', 'https:')):
+                    webbrowser.open(path)
+                else:
+                    try:
+                        os.startfile(path) if os.name == 'nt' else webbrowser.open(f"file://{os.path.abspath(path)}")
+                    except Exception as e:
+                        messagebox.showerror("Error", f"Could not open path:\n{path}\n{str(e)}")
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = JobDashboard(root)
+    root.mainloop()
