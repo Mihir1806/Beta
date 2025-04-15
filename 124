@@ -1,48 +1,46 @@
-Redesign the Job Analytics Dashboard interface to have a modern, minimalist look while preserving all existing features and data. Keep all components in place, but visually enhance them as follows:
-	•	Use a light theme with a white or soft gray background instead of the current dark theme.
-	•	Replace blocky elements with rounded corners throughout (cards, buttons, input fields, etc.).
-	•	Style the buttons (“Today”, “7 Days”, “30 Days”, “Apply Date Range”, “Reset Filters”) with soft shadows, subtle hover effects, and muted blue gradients.
-	•	Use modern sans-serif fonts with medium weight for readability and a cleaner appearance.
-	•	Introduce a card layout for sections like Filter Options, Job Status Distribution, and the Job Table – each with a soft drop shadow.
-	•	Update the pie chart to a sleeker, flat design with a pastel green for “Success” and coral red for “Failure”, and animate the segments on hover.
-	•	Style the job table with:
-	•	White background and subtle row separators.
-	•	Light blue highlight for hovered rows.
-	•	Rounded table headers and better spacing for columns.
-	•	Align text for readability and add minimal border radius around the table box.
-	•	Remove all heavy outlines; use fine lines or light separators for divisions.
-	•	Keep all existing labels, filters, and data fields unchanged in position and naming.
+Design a modern Job Analytics Dashboard using a clean, professional layout with a card-based interface. Use the following color scheme and design elements:
 
+Color Palette:
+	•	Background (Dark Theme): #121212
+	•	Card Background: #1E1E1E
+	•	Primary Text: #FFFFFF
+	•	Secondary Text: #B0B0B0
+	•	Button (Primary): #6C63FF
+	•	Button Text: #FFFFFF
+	•	Success Tag: #28C76F
+	•	Failure Tag: #EA5455
+	•	Chart Success: #28C76F
+	•	Chart Failure: #EA5455
 
+Typography:
+	•	Font: Inter or Roboto
+	•	Font Weight: 400 (normal), 600 (headings)
+	•	Title Size: 24px
+	•	Label Size: 14px
+	•	Value Text: 16px
 
-
-
-
-
-Design a modern Job Analytics Dashboard with a clean, minimal UI and card-based layout.
-Use a light or dark theme with soft shadows and rounded corners.
-
-Sections to include:
-	1.	Header:
-	•	Title: “Job Analytics Dashboard”
-	•	Simple and bold, centered or aligned left on top.
-	2.	Filter Panel (Left Side):
-	•	Buttons: “Today”, “7 Days”, “30 Days”
-	•	Custom date range with “From” and “To” calendar inputs
-	•	A sleek “Apply Date Range” button
-	•	“Reset Filters” as a hyperlink-style button
-	3.	Job Status Overview (Left Bottom):
-	•	Donut or pie chart showing job success vs. failure
-	•	Green for Success, Red for Failure
-	•	Total number of jobs in center with labels around chart
-	4.	Job Details Table (Right Side):
-	•	Columns: Job Name, Status (colored tags: green = Success, red = Failure), Execution Time, Log Path
-	•	Table design: modern, borderless rows with alternating row background
-	•	Icons or color indicators for success/failure
-	•	Add filters/sorting options at the top right of the table
-
-Design Style:
-	•	Font: Open Sans, Roboto, or Inter
-	•	Spacing: Generous padding and margin for a breathable feel
-	•	Color palette: modern neutrals with green/red as status indicators
-	•	Fully responsive layout
+Layout & Components:
+	1.	Top Header (Sticky)
+	•	Text: “Job Analytics Dashboard”
+	•	Font size: 24px, bold, white text on dark background
+	2.	Filter Panel (Card - Left Section)
+	•	Background: #1E1E1E with rounded corners (8px) and shadow
+	•	Elements:
+	•	Quick Filters: Buttons for “Today”, “7 Days”, “30 Days” (#6C63FF)
+	•	Custom Date Range: Calendar pickers with subtle borders
+	•	Apply Button: Filled with #6C63FF, white text
+	•	Reset Filters: Text button in #B0B0B0
+	3.	Job Status Overview (Card - Below Filters)
+	•	Donut Chart
+	•	Success: #28C76F, Failure: #EA5455
+	•	Center label showing count: “Success: X | Failure: Y”
+	4.	Job Details Panel (Card - Right Section)
+	•	Background: #1E1E1E, rounded corners, subtle shadow
+	•	Table-style layout with the following columns:
+	•	Job Name: White bold text
+	•	Status: Colored pill tags:
+	•	Green (#28C76F) for Success
+	•	Red (#EA5455) for Failure
+	•	Execution Time: Light gray text (#B0B0B0)
+	•	Log Path: Truncated with tooltip on hover
+	•	Add subtle hover effect on rows: background #2A2A2A
