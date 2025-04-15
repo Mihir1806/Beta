@@ -1,87 +1,176 @@
-import requests
+import tkinter as tk
+from tkinter import ttk
+from tkinter import filedialog
 import pandas as pd
-import ssl
-from datetime import datetime
-from requests.adapters import HTTPAdapter
-from urllib3.util.ssl_ import create_urllib3_context
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import os
+import webbrowser
+from datetime import datetime, timedelta
 
-# Custom adapter to enforce TLS 1.2+
-class TLSAdapter(HTTPAdapter):
-    def init_poolmanager(self, *args, **kwargs):
-        context = create_urllib3_context()
-        context.minimum_version = ssl.TLSVersion.TLSv1_2  # Enforce TLS 1.2+
-        kwargs["ssl_context"] = context
-        super().init_poolmanager(*args, **kwargs)
+class JobAnalyticsDashboard:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Job Analytics Dashboard")
+        self.root.configure(bg="#1E1E2F")
 
-# Jira API details
-JIRA_URL = "https://your-jira-instance.atlassian.net"
-API_KEY = "your_api_key"
-JQL_FILTER_ID = "your_filter_id"
-COOKIES = {
-    "JSESSIONID": "your_session_cookie",
-    "ATLASSIAN_TOKEN": "your_atlassian_token",
-    "OTHER_COOKIE": "your_other_cookie"
-}  # Add your Jira session cookie here
+        # Load Excel data
+        self.data = None
+        self.load_data()
 
-# Initialize requests session with custom TLS adapter
-session = requests.Session()
-session.mount("https://", TLSAdapter())
-session.headers.update({
-    "Accept": "application/json",
-    "Authorization": f"Basic {API_KEY}"
-})
-session.cookies.update(COOKIES)  # Add cookies to session
+        # UI Styling
+        self.style = ttk.Style()
+        self.style.theme_use("clam")  # Use clam theme as a base for custom styling
 
-# Function to fetch data from Jira using a filter
-def fetch_jira_issues():
-    url = f"{JIRA_URL}/rest/api/3/search?filter={JQL_FILTER_ID}"
-    try:
-        response = session.get(url, timeout=10)
-        response.raise_for_status()
-        return response.json().get("issues", [])
-    except requests.exceptions.SSLError as e:
-        print("SSL Error:", e)
-        return []
-    except requests.exceptions.RequestException as e:
-        print("Request Error:", e)
-        return []
+        self.style.configure("TButton", background="#2A2A3B", foreground="#FFFFFF", borderwidth=0, padding=8, font=("Segoe UI", 12))
+        self.style.map("TButton", background=[("active", "#3A3A4A")])
 
-# Function to calculate KPIs
-def calculate_kpis(issues):
-    total_issues = len(issues)
-    avg_resolution_time = 0
-    resolved_issues = []
-    
-    for issue in issues:
-        fields = issue.get("fields", {})
-        if "resolutiondate" in fields:
-            created = datetime.strptime(fields["created"], "%Y-%m-%dT%H:%M:%S.%f%z")
-            resolved = datetime.strptime(fields["resolutiondate"], "%Y-%m-%dT%H:%M:%S.%f%z")
-            resolution_time = (resolved - created).total_seconds() / 3600  # Hours
-            resolved_issues.append(resolution_time)
-    
-    if resolved_issues:
-        avg_resolution_time = sum(resolved_issues) / len(resolved_issues)
-    
-    return {"Total Issues": total_issues, "Avg Resolution Time (hrs)": avg_resolution_time}
+        self.style.configure("Treeview", background="#2A2A3B", foreground="#FFFFFF", fieldbackground="#2A2A3B", bordercolor="#2A2A3B", font=("Segoe UI", 12))
+        self.style.configure("Treeview.Heading", background="#2A2A3B", foreground="#CCCCCC", font=("Segoe UI", 12, "bold"))
 
-# Function to save KPIs to Excel
-def save_to_excel(kpi_data):
-    df = pd.DataFrame([kpi_data])
-    df.to_excel("jira_kpi_report.xlsx", index=False)
-    print("KPI report saved to jira_kpi_report.xlsx")
+        self.style.configure("Success.TLabel", background="#1F8A70", foreground="#FFFFFF", font=("Segoe UI", 12))
+        self.style.configure("Failure.TLabel", background="#B00020", foreground="#FFFFFF", font=("Segoe UI", 12))
+
+        # Date Filter Frame
+        self.filter_frame = ttk.Frame(root, padding=20)
+        self.filter_frame.grid(row=0, column=0, sticky="nsew")
+
+        ttk.Label(self.filter_frame, text="FILTER", font=("Segoe UI", 16, "bold"), foreground="#FFFFFF").grid(row=0, column=0, columnspan=2, pady=(0, 10))
+
+        self.date_var = tk.StringVar(value="Today")
+        ttk.Radiobutton(self.filter_frame, text="Today", variable=self.date_var, value="Today", command=self.apply_filter).grid(row=1, column=0, sticky="w", pady=5)
+        ttk.Radiobutton(self.filter_frame, text="7 Days", variable=self.date_var, value="7 Days", command=self.apply_filter).grid(row=2, column=0, sticky="w", pady=5)
+        ttk.Radiobutton(self.filter_frame, text="30 Days", variable=self.date_var, value="30 Days", command=self.apply_filter).grid(row=3, column=0, sticky="w", pady=5)
+        ttk.Radiobutton(self.filter_frame, text="Custom Range", variable=self.date_var, value="Custom", command=self.show_custom_range).grid(row=4, column=0, sticky="w", pady=5)
+
+        self.start_date_entry = ttk.Entry(self.filter_frame)
+        self.end_date_entry = ttk.Entry(self.filter_frame)
+
+        # Donut Chart Frame
+        self.chart_frame = ttk.Frame(root, padding=20)
+        self.chart_frame.grid(row=0, column=1, sticky="nsew")
+
+        ttk.Label(self.chart_frame, text="Job Status Overview", font=("Segoe UI", 16, "bold"), foreground="#FFFFFF").pack(pady=(0, 10))
+
+        self.fig, self.ax = plt.subplots(figsize=(5, 4), facecolor="#1E1E2F")
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.chart_frame)
+        self.canvas.get_tk_widget().pack()
+
+        # Job Details Table Frame
+        self.table_frame = ttk.Frame(root, padding=20)
+        self.table_frame.grid(row=1, column=1, sticky="nsew")
+
+        ttk.Label(self.table_frame, text="Job Details", font=("Segoe UI", 16, "bold"), foreground="#FFFFFF").pack(pady=(0, 10))
+
+        self.tree = ttk.Treeview(self.table_frame, columns=("job_name", "status", "Execution_Time", "Path", "Received_Date"), show="headings")
+        self.tree.pack(fill="both", expand=True)
+
+        self.tree.heading("job_name", text="Job Name")
+        self.tree.heading("status", text="Status")
+        self.tree.heading("Execution_Time", text="Execution Time")
+        self.tree.heading("Path", text="Path")
+        self.tree.heading("Received_Date", text="Received Date")
+
+        self.tree.column("job_name", width=150)
+        self.tree.column("status", width=80)
+        self.tree.column("Execution_Time", width=120)
+        self.tree.column("Path", width=250)
+        self.tree.column("Received_Date", width=150)
+
+        self.tree.bind("<ButtonRelease-1>", self.on_tree_click)
+
+        self.apply_filter()
+
+    def load_data(self):
+        try:
+            self.data = pd.read_excel("xyz.xlsx")
+            self.data["Received_Date"] = pd.to_datetime(self.data["Received_Date"])
+        except FileNotFoundError:
+            print("xyz.xlsx not found.")
+            self.data = pd.DataFrame()
+
+    def apply_filter(self):
+        if self.data is None:
+            return
+
+        selected_filter = self.date_var.get()
+        today = datetime.now().date()
+
+        if selected_filter == "Today":
+            filtered_data = self.data[self.data["Received_Date"].dt.date == today]
+        elif selected_filter == "7 Days":
+            filtered_data = self.data[self.data["Received_Date"].dt.date >= today - timedelta(days=7)]
+        elif selected_filter == "30 Days":
+            filtered_data = self.data[self.data["Received_Date"].dt.date >= today - timedelta(days=30)]
+        elif selected_filter == "Custom":
+            try:
+                start_date = datetime.strptime(self.start_date_entry.get(), "%Y-%m-%d").date()
+                end_date = datetime.strptime(self.end_date_entry.get(), "%Y-%m-%d").date()
+                filtered_data = self.data[(self.data["Received_Date"].dt.date >= start_date) & (self.data["Received_Date"].dt.date <= end_date)]
+            except ValueError:
+                filtered_data = self.data  # Show all if custom dates are invalid
+
+        self.update_chart(filtered_data)
+        self.update_table(filtered_data)
+
+    def show_custom_range(self):
+        self.start_date_entry.grid(row=5, column=0, pady=5)
+        self.end_date_entry.grid(row=6, column=0, pady=5)
+
+    def update_chart(self, data):
+        success_count = len(data[data["status"] == "Success"])
+        failure_count = len(data[data["status"] == "Failure"])
+        total_count = len(data)
+
+        sizes = [success_count, failure_count]
+        labels = ["Success", "Failure"]
+        colors = ["#1F8A70", "#B00020"]
+
+        self.ax.clear()
+        wedges, texts, autotexts = self.ax.pie(sizes, labels=labels, colors=colors, autopct="%1.1f%%", startangle=140, wedgeprops=dict(width=0.4))
+        self.ax.set_title("Job Status", color="#FFFFFF")
+        self.ax.set_facecolor("#1E1E2F")
+        self.fig.set_facecolor("#1E1E2F")
+
+        for text in texts + autotexts:
+            text.set_color("#FFFFFF")
+
+        self.canvas.draw()
+
+        def on_click(event):
+            if event.inaxes == self.ax:
+                for i, wedge in enumerate(wedges):
+                    if wedge.contains_point((event.x, event.y)):
+                        if labels[i] == "Success":
+                            self.update_table(data[data["status"] == "Success"])
+                        elif labels[i] == "Failure":
+                            self.update_table(data[data["status"] == "Failure"])
+                        break
+
+        self.fig.canvas.mpl_connect("button_press_event", on_click)
+
+    def update_table(self, data):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+
+        for index, row in data.iterrows():
+            self.tree.insert("", "end", values=(row["job_name"], row["status"], row["Execution_Time"], row["Path"], row["Received_Date"].strftime("%Y-%m-%d %H:%M:%S")))
+
+    def on_tree_click(self, event):
+        item = self.tree.identify("item", event.x, event.y)
+        if item:
+            column = self.tree.identify_column(event.x)
+            if column == "#4":  # Path column
+                path = self.tree.item(item, "values")[3]
+                if path.startswith("http://") or path.startswith("https://"):
+                    webbrowser.open_new_tab(path)
+                else:
+                    try:
+                        os.startfile(path)
+                    except OSError:
+                        print(f"Cannot open file: {path}")
 
 if __name__ == "__main__":
-    print("Fetching issues from Jira using filter...")
-    issues = fetch_jira_issues()
-    print("Input (Fetched Issues):", issues)
-    
-    if issues:
-        print("Calculating KPIs...")
-        kpi_data = calculate_kpis(issues)
-        print("Output (Calculated KPIs):", kpi_data)
-        
-        print("Saving KPIs to Excel...")
-        save_to_excel(kpi_data)
-    else:
-        print("No issues fetched. Please check Jira filter settings.")
+    root = tk.Tk()
+    app = JobAnalyticsDashboard(root)
+    root.mainloop()
