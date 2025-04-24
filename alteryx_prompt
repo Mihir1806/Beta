@@ -1,0 +1,11 @@
+I have an Excel file named xyz.xlsx with columns including Status, Path, and Execution_Time. I want to generate a new output Excel file without modifying the original. Here’s the logic:
+	1.	For each row where the Status is 'Failure':
+	•	Use the hyperlink in the Path column to access a file location.
+	•	In that location, use the Execution_Time column (also a hyperlink) to find and open the related log file.
+	•	Read the log file and extract the top 10 most frequent error messages.
+	•	Create a new column named Error in the output Excel.
+	•	Populate the Error column of each 'Failure' row with those top 10 error messages, joined in a single cell.
+	2.	If any error message contains a Tool ID (e.g., numbers like 23, 105, etc.), search for that Tool ID in another Excel file named alteryx_tools_extracted.xlsx, which contains mappings of Tool ID to Tool Name.
+	•	Replace or enrich the error message by appending Tool Name (Tool ID) in place of just the Tool ID wherever found.
+
+The final output should be saved as a new Excel file, keeping the original xyz.xlsx unchanged.”
