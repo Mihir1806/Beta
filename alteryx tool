@@ -1,43 +1,60 @@
 import xml.etree.ElementTree as ET
 import pandas as pd
+import os
 
-def extract_tools_from_alteryx_workflow(file_path):
+def extract_alteryx_tools(file_path):
     """
-    Extracts tool IDs and names from an Alteryx workflow file.
+    Parses an Alteryx workflow and extracts Tool ID and Tool Name.
 
     Args:
-        file_path (str): Path to the Alteryx .yxmd/.yxmc/.yxwz file.
+        file_path (str): Path to the .yxmd/.yxmc/.yxwz file.
 
     Returns:
-        List[Tuple[str, str]]: A list of tuples with (ToolID, ToolName).
+        pd.DataFrame: DataFrame with columns ['Tool ID', 'Tool Name']
     """
+    if not os.path.exists(file_path):
+        raise FileNotFoundError(f"File not found: {file_path}")
+
     try:
         tree = ET.parse(file_path)
         root = tree.getroot()
 
-        tools_info = []
-
+        tools = []
         for node in root.iter('Node'):
-            tool_id = node.attrib.get('ToolID')
-            tool_name = node.attrib.get('Tool')
+            tool_id = node.attrib.get('ToolID', '').strip()
+            tool_name = node.attrib.get('Tool', '').strip()
+
             if tool_id and tool_name:
-                tools_info.append((tool_id, tool_name))
+                tools.append({"Tool ID": tool_id, "Tool Name": tool_name})
 
-        return tools_info
+        return pd.DataFrame(tools)
 
+    except ET.ParseError as pe:
+        raise ValueError(f"XML parsing error: {pe}")
     except Exception as e:
-        print(f"Error reading workflow: {e}")
-        return []
+        raise RuntimeError(f"Failed to extract tools: {e}")
+
+def save_tools_to_excel(df, output_file):
+    """
+    Saves the DataFrame to an Excel file.
+
+    Args:
+        df (pd.DataFrame): DataFrame with tool info.
+        output_file (str): Output Excel filename.
+    """
+    df.to_excel(output_file, index=False)
+    print(f"Tool list saved to: {output_file}")
 
 if __name__ == "__main__":
-    file_name = "MyWorkflow.yxmd"  # Replace with your actual Alteryx workflow file
-    output_excel = "Alteryx_Tools_Extracted.xlsx"
+    # Update the filename below as needed
+    input_file = "MyWorkflow.yxmd"  # File should be in the same folder as this script
+    output_file = "Alteryx_Tools_Extracted.xlsx"
 
-    tools = extract_tools_from_alteryx_workflow(file_name)
-
-    if tools:
-        df = pd.DataFrame(tools, columns=["Tool ID", "Tool Name"])
-        df.to_excel(output_excel, index=False)
-        print(f"Tool data saved to: {output_excel}")
-    else:
-        print("No tools found or error occurred.")
+    try:
+        df_tools = extract_alteryx_tools(input_file)
+        if df_tools.empty:
+            print("No tools found in the workflow.")
+        else:
+            save_tools_to_excel(df_tools, output_file)
+    except Exception as err:
+        print(f"Error: {err}")
