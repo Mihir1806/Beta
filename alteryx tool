@@ -1,0 +1,43 @@
+import xml.etree.ElementTree as ET
+import pandas as pd
+
+def extract_tools_from_alteryx_workflow(file_path):
+    """
+    Extracts tool IDs and names from an Alteryx workflow file.
+
+    Args:
+        file_path (str): Path to the Alteryx .yxmd/.yxmc/.yxwz file.
+
+    Returns:
+        List[Tuple[str, str]]: A list of tuples with (ToolID, ToolName).
+    """
+    try:
+        tree = ET.parse(file_path)
+        root = tree.getroot()
+
+        tools_info = []
+
+        for node in root.iter('Node'):
+            tool_id = node.attrib.get('ToolID')
+            tool_name = node.attrib.get('Tool')
+            if tool_id and tool_name:
+                tools_info.append((tool_id, tool_name))
+
+        return tools_info
+
+    except Exception as e:
+        print(f"Error reading workflow: {e}")
+        return []
+
+if __name__ == "__main__":
+    file_name = "MyWorkflow.yxmd"  # Replace with your actual Alteryx workflow file
+    output_excel = "Alteryx_Tools_Extracted.xlsx"
+
+    tools = extract_tools_from_alteryx_workflow(file_name)
+
+    if tools:
+        df = pd.DataFrame(tools, columns=["Tool ID", "Tool Name"])
+        df.to_excel(output_excel, index=False)
+        print(f"Tool data saved to: {output_excel}")
+    else:
+        print("No tools found or error occurred.")
