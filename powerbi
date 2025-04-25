@@ -64,3 +64,24 @@ def extract_job_name(text):
 dataset['Job_Name'] = dataset['Subject'].apply(extract_job_name)
 
 
+
+
+# 'dataset' is the input DataFrame from Power BI
+import pandas as pd
+import re
+
+# Ensure 'Subject' is string
+dataset['Subject'] = dataset['Subject'].astype(str)
+
+# Extract only 'IN' or 'KR' based on pattern match
+def extract_prefix(text):
+    if re.search(r'\bIN_[A-Za-z0-9]+', text):
+        return "IN"
+    elif re.search(r'\bKR_[A-Za-z0-9]+', text):
+        return "KR"
+    else:
+        return ""
+
+dataset['Job_Name'] = dataset['Subject'].apply(extract_prefix)
+
+
