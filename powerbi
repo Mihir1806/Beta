@@ -11,3 +11,6 @@ def extract_job_name(text):
     return matches[0] if matches else None
 
 dataset['Job_Name'] = dataset['Subject'].apply(extract_job_name)
+
+
+= if Text.Contains([Subject], "in_") then "in_" & Text.BeforeAny(Text.After([Subject], "in_"), {" ", ","}) else null
