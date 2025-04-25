@@ -1,9 +1,13 @@
+# 'dataset' is the input DataFrame from Power BI
 import pandas as pd
+import re
 
-# Extract job name starting with "in_" from the 'Subject' column
-def extract_job(subject):
-    if isinstance(subject, str) and subject.startswith("in_"):
-        return subject
-    return None
+# Ensure 'Subject' is string
+dataset['Subject'] = dataset['Subject'].astype(str)
 
-dataset["Job_Name"] = dataset["Subject"].apply(extract_job)
+# Extract only first word that starts with 'in_'
+def extract_job_name(text):
+    matches = re.findall(r'\bin_[\w]+', text)
+    return matches[0] if matches else None
+
+dataset['Job_Name'] = dataset['Subject'].apply(extract_job_name)
