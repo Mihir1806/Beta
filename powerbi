@@ -44,6 +44,23 @@ IF(
 )
 
 
-= if Text.StartsWith([Path], "\\") then "file://" & Text.Replace([Path], "\", "/") else ""
+= if Text.StartsWith([Path], "\\") then "file://" & Text.Replace([Path], "\", "/") else "
+
+
+
+
+# 'dataset' is the input DataFrame from Power BI
+import pandas as pd
+import re
+
+# Ensure 'Subject' is string
+dataset['Subject'] = dataset['Subject'].astype(str)
+
+# Extract first word that starts with 'in_', 'IN_', or 'KR_'
+def extract_job_name(text):
+    matches = re.findall(r'\b(?:in_|IN_|KR_)\w+', text)
+    return matches[0] if matches else None
+
+dataset['Job_Name'] = dataset['Subject'].apply(extract_job_name)
 
 
