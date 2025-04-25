@@ -36,3 +36,14 @@ else
 
 
 
+HyperlinkPath = 
+IF(
+    LEFT([Path], 2) = "\\", 
+    "file://" & SUBSTITUTE([Path], "\", "/"), 
+    BLANK()
+)
+
+
+
+
+
