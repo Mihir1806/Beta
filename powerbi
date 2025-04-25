@@ -44,6 +44,6 @@ IF(
 )
 
 
-
+= if Text.StartsWith([Path], "\\") then "file://" & Text.Replace([Path], "\", "/") else ""
 
 
