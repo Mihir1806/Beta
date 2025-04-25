@@ -14,3 +14,14 @@ dataset['Job_Name'] = dataset['Subject'].apply(extract_job_name)
 
 
 = if Text.Contains([Subject], "in_") then "in_" & Text.BeforeAny(Text.After([Subject], "in_"), {" ", ","}) else null
+
+
+if Text.Contains([Status], "Failure") then 
+    let
+        previewText = [Preview],
+        startPos = Text.PositionOf(previewText, "\\"),
+        result = if startPos >= 0 then Text.Middle(previewText, startPos) else "failed with no path"
+    in
+        result
+else 
+    null
