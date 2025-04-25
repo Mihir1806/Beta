@@ -25,3 +25,7 @@ if Text.Contains([Status], "Failure") then
         result
 else 
     null
+
+= if Text.Contains([Subject], "in_") then "in_" & Text.BeforeAny(Text.After([Subject], "in_"), {" ", ","}) else null
+
+
