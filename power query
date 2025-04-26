@@ -12,10 +12,12 @@
 
 
 
-MergedTable = 
-ADDCOLUMNS(
-    Mail,
-    "DateAccessed", RELATED(FLEXEL_LOG_IN[Date accessed]),
-    "DateCreated", RELATED(FLEXEL_LOG_IN[Date created]),
-    "ExecutionTimeIN", RELATED(FLEXEL_LOG_IN[Execution Time IN])
+= Text.Combine(
+    List.Select(
+        Text.Split(Text.FromBinary([Content]), "#(lf)"),
+        each 
+            Text.Contains(_, "error", Comparer.OrdinalIgnoreCase) 
+            and not Text.Contains(_, "FieldConversionError", Comparer.OrdinalIgnoreCase)
+    ),
+    "#(lf)"
 )
