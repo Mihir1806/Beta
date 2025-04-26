@@ -21,3 +21,16 @@
     ),
     "#(lf)"
 )
+
+
+= Text.Combine(
+    List.Select(
+        Text.Split(Text.FromBinary([Content]), "#(lf)"),
+        each 
+            Text.Contains(_, "error", Comparer.OrdinalIgnoreCase) 
+            and not Text.Contains(_, "FieldConversionError", Comparer.OrdinalIgnoreCase)
+            and not Text.Contains(_, "warning", Comparer.OrdinalIgnoreCase)
+    ),
+    "#(lf)"
+)
+
