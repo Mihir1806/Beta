@@ -1,21 +1,3 @@
-(textContent as text) as text =>
-let
-    Lines = Lines.FromText(textContent, null, null),
-    ErrorLines = List.Select(Lines, each Text.Contains(Text.Lower(_), "error")),
-    Result = Text.Combine(ErrorLines, " | ")
-in
-    Result
-
-
-
-= Text.Combine(
-    List.Select(
-        Text.Split([FileText], "#(lf)"), 
-        each Text.Contains(_, "error", Comparer.OrdinalIgnoreCase)
-    ),
-    "#(lf)"
-  )
-
 
 
 = Text.Combine(
@@ -24,4 +6,16 @@ in
         each Text.Contains(_, "error", Comparer.OrdinalIgnoreCase)
     ),
     "#(lf)"
+)
+
+
+
+
+
+MergedTable = 
+ADDCOLUMNS(
+    Mail,
+    "DateAccessed", RELATED(FLEXEL_LOG_IN[Date accessed]),
+    "DateCreated", RELATED(FLEXEL_LOG_IN[Date created]),
+    "ExecutionTimeIN", RELATED(FLEXEL_LOG_IN[Execution Time IN])
 )
