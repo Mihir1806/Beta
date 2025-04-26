@@ -1,0 +1,7 @@
+(textContent as text) as text =>
+let
+    Lines = Lines.FromText(textContent, null, null),
+    ErrorLines = List.Select(Lines, each Text.Contains(Text.Lower(_), "error")),
+    Result = Text.Combine(ErrorLines, " | ")
+in
+    Result
