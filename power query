@@ -5,3 +5,13 @@ let
     Result = Text.Combine(ErrorLines, " | ")
 in
     Result
+
+
+
+= Text.Combine(
+    List.Select(
+        Text.Split([FileText], "#(lf)"), 
+        each Text.Contains(_, "error", Comparer.OrdinalIgnoreCase)
+    ),
+    "#(lf)"
+  )
