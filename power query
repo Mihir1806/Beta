@@ -15,3 +15,13 @@ in
     ),
     "#(lf)"
   )
+
+
+
+= Text.Combine(
+    List.Select(
+        Text.Split(Text.FromBinary([Content]), "#(lf)"),
+        each Text.Contains(_, "error", Comparer.OrdinalIgnoreCase)
+    ),
+    "#(lf)"
+)
