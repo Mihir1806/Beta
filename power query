@@ -56,3 +56,38 @@ otherwise null
   else if Text.Contains([Subject], "ID_") then "ID" 
   else null
 
+
+
+
+let 
+    errorText = [Error],
+    jobName = [Job Name],
+    toolIdFound = 
+        if errorText <> null and Text.Contains(errorText, "ToolId") then
+            let
+                afterToolId = Text.AfterDelimiter(errorText, "ToolId "),
+                extractedId = Text.BeforeDelimiter(afterToolId, ":")
+            in
+                "ToolId " & Text.Trim(extractedId)
+        else
+            null,
+    toolRecord = 
+        if toolIdFound <> null then
+            let 
+                filteredTool = Table.SelectRows(TOOL_LIST, each [Job Name] = jobName and [Tool ID] = toolIdFound)
+            in 
+                if Table.RowCount(filteredTool) > 0 then 
+                    filteredTool{0}[Tool Name]
+                else 
+                    null
+        else
+            null,
+    updatedError = 
+        if toolIdFound <> null and toolRecord <> null then
+            Text.Replace(errorText, toolIdFound, toolIdFound & " (Tool Name- " & toolRecord & ")")
+        else
+            errorText
+in
+    updatedError
+
+
