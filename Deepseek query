@@ -1,45 +1,50 @@
 let
-    // Assume your source data is in a table named "ErrorLog"
-    Source = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText("i45WclTSUTI0MDAwVYrViVZyBFLGQMoESJkCKTMgZQ6kLICUJZCyAlLWQMqGqBk2QMoWSNkBKXsg5QCkHIGUE5ByBlIuQMqVqBmuQMoNSLkDKQ8g5QmkPIGUF5DyBlI+QMqXqBl+QMofSAUAKX8gFQCkAoFUEFCvQiwA", BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [JobName = _t, ErrorText = _t]),
+    // Replace this with your actual error log source
+    ErrorLog = Excel.CurrentWorkbook(){[Name="ErrorLog"]}[Content],
     
-    // Sample ToolList table - replace with your actual data source
-    ToolList = Table.FromRows(
-        Json.Document(Binary.Decompress(Binary.FromText("i45WclTSUTI0MDAwVYrViVZyBFLGQMoESJkCKTMgZQ6kLICUJZCyAlLWQMqGqBk2QMoWSNkBKXsg5QCkHIGUE5ByBlIuQMqVqBmuQMoNSLkDKQ8g5QmkPIGUF5DyBlI+QMqXqBl+QMofSAUAKX8gFQCkAoFUEFCvQiwA", BinaryEncoding.Base64), Compression.Deflate)), 
-        let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [ToolId = _t, ToolName = _t, JobName = _t]
-    ),
+    // Replace this with your actual tool list source
+    ToolList = Excel.CurrentWorkbook(){[Name="ToolList"]}[Content],
     
-    // Custom function to extract and replace ToolIds
+    // Function to replace ToolId with ToolId (ToolName)
     ReplaceToolIds = (errorText as text, jobName as text) as text =>
         let
-            // Extract all ToolId numbers from the error text
-            ToolIdMatches = Text.Split(Text.Combine(List.Select(
-                Text.Split(errorText, " "), 
-                each Text.StartsWith(_, "Toolid") or Text.StartsWith(_, "ToolId") or Text.StartsWith(_, "toolid")
-            ), " "), " "),
+            // Find all ToolId occurrences (case insensitive)
+            ToolIdPositions = Text.PositionOfAny(errorText, {"Toolid ", "ToolId ", "toolid "}, Occurrence.All),
             
-            // Get distinct ToolIds
-            ToolIds = List.Distinct(List.RemoveItems(ToolIdMatches, {"Toolid", "ToolId", "toolid"})),
-            
-            // Replace each ToolId with ToolId <number> (<Tool Name>)
-            ReplaceEachId = List.Accumulate(
-                ToolIds,
+            // Process each found ToolId
+            Result = List.Accumulate(
+                ToolIdPositions,
                 errorText,
-                (currentText, toolId) =>
+                (currentText, position) =>
                     let
-                        // Look up the tool name in ToolList table
-                        ToolName = try 
-                            Table.SelectRows(ToolList, each [ToolId] = toolId and [JobName] = jobName){0}[ToolName] 
-                        otherwise "Unknown Tool",
+                        // Extract the ToolId number (assuming it follows "Toolid ")
+                        ToolIdEnd = Text.PositionOf(errorText, ":", position),
+                        ToolIdFull = Text.Middle(errorText, position, ToolIdEnd - position),
+                        ToolIdNumber = Text.Trim(Text.Split(ToolIdFull, " "){1}),
                         
-                        // Create the replacement string
-                        Replacement = "ToolId " & toolId & " (" & ToolName & ")"
+                        // Look up the ToolName (matching both ToolId and JobName)
+                        MatchingTools = Table.SelectRows(ToolList, each 
+                            Text.From([ToolId]) = ToolIdNumber and 
+                            [JobName] = jobName),
+                        
+                        ToolName = if Table.IsEmpty(MatchingTools) then 
+                            "Unknown Tool" else 
+                            Table.FirstValue(MatchingTools[ToolName]),
+                        
+                        // Create replacement text
+                        Replacement = "ToolId " & ToolIdNumber & " (" & ToolName & ")"
                     in
-                        Text.Replace(currentText, "Toolid " & toolId, Replacement)
+                        Text.Replace(currentText, ToolIdFull, Replacement)
             )
         in
-            ReplaceEachId,
+            Result,
     
-    // Apply the function to each row
-    AddedCustom = Table.AddColumn(Source, "FormattedErrorText", each ReplaceToolIds([ErrorText], [JobName]), type text)
+    // Apply the transformation
+    FormattedErrors = Table.AddColumn(
+        ErrorLog, 
+        "FormattedErrorText", 
+        each ReplaceToolIds([ErrorText], [JobName]), 
+        type text
+    )
 in
-    AddedCustom
+    FormattedErrors
