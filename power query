@@ -131,3 +131,52 @@ in
 
 
 
+
+
+
+let 
+    errorText = [Error],
+    jobName = [Job Name],
+    toolIdsFound = 
+        if errorText <> null and Text.Contains(errorText, "ToolId") then
+            List.Transform(
+                Text.Split(errorText, "ToolId "),
+                each Text.BeforeDelimiter(_, ":")
+            )
+        else
+            {},
+    toolIdsCleaned = 
+        List.Select(
+            List.Transform(toolIdsFound, each Text.Trim(_)),
+            each _ <> ""
+        ),
+    updatedError = 
+        List.Accumulate(
+            toolIdsCleaned, 
+            errorText, 
+            (state, currentToolId) =>
+                let
+                    toolIdFull = "ToolId " & currentToolId,
+                    toolRecord = 
+                        let 
+                            filteredTool = Table.SelectRows(Tool_List, each [Job Name] = jobName and [Tool ID] = toolIdFull)
+                        in 
+                            if Table.RowCount(filteredTool) > 0 then 
+                                filteredTool{0}[Tool Name]
+                            else 
+                                null,
+                    newToolIdText = 
+                        if toolRecord <> null then 
+                            toolIdFull & " (Tool Name- " & toolRecord & ")" 
+                        else 
+                            toolIdFull
+                in
+                    Text.Replace(state, toolIdFull, newToolIdText)
+        )
+in
+    updatedError
+
+
+
+
+
