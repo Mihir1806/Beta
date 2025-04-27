@@ -1,42 +1,30 @@
-let 
+let
     errorText = [Error],
     jobName = [Job Name],
-    toolIdsFound = 
-        if errorText <> null and Text.Contains(errorText, "ToolId") then
-            List.Transform(
-                List.RemoveFirstN(Text.SplitAny(errorText, " "), 1),
-                each Text.BeforeDelimiter(_, ":")
-            )
+    toolIdMatches = 
+        if errorText <> null then
+            let
+                matches = Text.RegexReplace(errorText, ".*?(ToolId\s\d+).*", "$1"),
+                allMatches = Text.RegexReplace(errorText, ".*?(ToolId\s\d+).*", "$1"),
+                allToolIds = Text.RegexReplace(errorText, ".*?(ToolId\s\d+).*", "$1"),
+                extractAll = List.Transform(Text.RegexReplace(errorText, "([Tt]ool[Ii]d\s\d+)", "#(tab)\1").Split("#(tab)"), Text.Trim),
+                cleanExtract = List.Select(extractAll, each Text.StartsWith(_, "ToolId"))
+            in
+                cleanExtract
         else
             {},
-    toolIdsCleaned = 
-        List.Select(
-            List.Transform(toolIdsFound, each Text.Trim(_)),
-            each _ <> ""
+    transformToolIds = 
+        List.Transform(toolIdMatches, each 
+            let
+                toolIdFull = _,   // Already "ToolId 451"
+                filteredTool = Table.SelectRows(ToolList, each [Job Name] = jobName and [Tool ID] = toolIdFull),
+                toolNameFound = if Table.RowCount(filteredTool) > 0 then filteredTool{0}[Tool Name] else null,
+                replacementText = if toolNameFound <> null then toolIdFull & " (Tool Name- " & toolNameFound & ")" else toolIdFull
+            in
+                [Original = toolIdFull, Replacement = replacementText]
         ),
     updatedError = 
-        List.Accumulate(
-            toolIdsCleaned, 
-            errorText, 
-            (state, currentToolId) =>
-                let
-                    toolIdFull = "ToolId " & currentToolId,
-                    toolRecord = 
-                        let 
-                            filteredTool = Table.SelectRows(Tool_List, each [Job Name] = jobName and [Tool ID] = toolIdFull)
-                        in 
-                            if Table.RowCount(filteredTool) > 0 then 
-                                filteredTool{0}[Tool Name]
-                            else 
-                                null,
-                    newToolIdText = 
-                        if toolRecord <> null then 
-                            toolIdFull & " (Tool Name- " & toolRecord & ")" 
-                        else 
-                            toolIdFull
-                in
-                    Text.Replace(state, toolIdFull, newToolIdText)
-        )
+        List.Accumulate(transformToolIds, errorText, (state, current) => Text.Replace(state, current[Original], current[Replacement]))
 in
     updatedError
 
