@@ -34,3 +34,19 @@
     "#(lf)"
 )
 
+
+
+
+= try 
+    Text.Select(
+        List.First(
+            List.Select(
+                Text.Split([Subject], " "), 
+                each Text.Contains(_, "IN_") or Text.Contains(_, "ID_")
+            )
+        ), 
+        {"A".."Z", "a".."z", "0".."9", "_"}
+    ) 
+otherwise null
+
+
