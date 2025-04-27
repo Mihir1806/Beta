@@ -17,6 +17,46 @@ let
     transformToolIds = 
         List.Transform(toolIdWords, each 
             let
+                toolIdFull = Text.Trim(_),   // "ToolId 2501"
+                toolIdNumber = Text.Trim(Text.AfterDelimiter(toolIdFull, "ToolId ")), // Extract just "2501"
+                
+                filteredTool = Table.SelectRows(ToolList, each [Job Name] = jobName and Text.From([Tool ID]) = toolIdNumber),
+                toolNameFound = if Table.RowCount(filteredTool) > 0 then filteredTool{0}[Tool Name] else null,
+                replacementText = if toolNameFound <> null then toolIdFull & " (Tool Name- " & toolNameFound & ")" else toolIdFull
+            in
+                [Original = toolIdFull, Replacement = replacementText]
+        ),
+
+    // Step 4: Replace in the Error Text
+    updatedError = 
+        List.Accumulate(transformToolIds, errorText, (state, current) => Text.Replace(state, current[Original], current[Replacement]))
+in
+    updatedError
+
+
+
+
+
+
+let
+    errorText = [Error],
+    jobName = [Job Name],
+
+    // Step 1: Break Error Text into Words
+    wordList = 
+        if errorText <> null then 
+            Text.SplitAny(errorText, " ,;:.") 
+        else 
+            {},
+
+    // Step 2: Pick only words that start with "ToolId"
+    toolIdWords = 
+        List.Select(wordList, each Text.StartsWith(Text.Trim(_), "ToolId")),
+
+    // Step 3: Prepare replacements
+    transformToolIds = 
+        List.Transform(toolIdWords, each 
+            let
                 toolIdFull = Text.Trim(_),   // "ToolId 451"
                 filteredTool = Table.SelectRows(ToolList, each [Job Name] = jobName and [Tool ID] = toolIdFull),
                 toolNameFound = if Table.RowCount(filteredTool) > 0 then filteredTool{0}[Tool Name] else null,
