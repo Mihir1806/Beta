@@ -39,3 +39,46 @@ let
         )
 in
     updatedError
+
+
+
+
+
+
+let 
+    errorText = [Error],
+    jobName = [Job Name],
+    toolIdFound = 
+        if errorText <> null and Text.Contains(errorText, "ToolId") then
+            let
+                afterToolId = Text.AfterDelimiter(errorText, "ToolId "),
+                extractedId = Text.BeforeDelimiter(afterToolId, ":")
+            in
+                Text.Trim(extractedId)
+        else
+            null,
+    toolIdFull = 
+        if toolIdFound <> null then 
+            "ToolId " & toolIdFound 
+        else 
+            null,
+    toolRecord = 
+        if toolIdFull <> null then
+            let 
+                filteredTool = Table.SelectRows(Tool_List, each [Job Name] = jobName and [Tool ID] = toolIdFull)
+            in 
+                if Table.RowCount(filteredTool) > 0 then 
+                    filteredTool{0}[Tool Name]
+                else 
+                    null
+        else
+            null,
+    updatedError = 
+        if toolIdFull <> null and toolRecord <> null then
+            Text.Replace(errorText, toolIdFull, toolIdFull & " (Tool Name- " & toolRecord & ")")
+        else
+            errorText
+in
+    updatedError
+
+
