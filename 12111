@@ -4,6 +4,43 @@ let
     toolIdMatches = 
         if errorText <> null then
             let
+                extractAll = Text.RegexReplace(errorText, "([Tt]ool[Ii]d\s\d+)", "#(tab)\1"),
+                splitList = Text.Split(extractAll, "#(tab)"),
+                cleanExtract = List.Select(List.Transform(splitList, each Text.Trim(_)), each Text.StartsWith(_, "ToolId"))
+            in
+                cleanExtract
+        else
+            {},
+    transformToolIds = 
+        List.Transform(toolIdMatches, each 
+            let
+                toolIdFull = _,   // Already "ToolId 451"
+                filteredTool = Table.SelectRows(ToolList, each [Job Name] = jobName and [Tool ID] = toolIdFull),
+                toolNameFound = if Table.RowCount(filteredTool) > 0 then filteredTool{0}[Tool Name] else null,
+                replacementText = if toolNameFound <> null then toolIdFull & " (Tool Name- " & toolNameFound & ")" else toolIdFull
+            in
+                [Original = toolIdFull, Replacement = replacementText]
+        ),
+    updatedError = 
+        List.Accumulate(transformToolIds, errorText, (state, current) => Text.Replace(state, current[Original], current[Replacement]))
+in
+    updatedError
+
+
+
+
+
+
+
+
+
+
+let
+    errorText = [Error],
+    jobName = [Job Name],
+    toolIdMatches = 
+        if errorText <> null then
+            let
                 matches = Text.RegexReplace(errorText, ".*?(ToolId\s\d+).*", "$1"),
                 allMatches = Text.RegexReplace(errorText, ".*?(ToolId\s\d+).*", "$1"),
                 allToolIds = Text.RegexReplace(errorText, ".*?(ToolId\s\d+).*", "$1"),
