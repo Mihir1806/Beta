@@ -1,3 +1,4 @@
+
 let
     errorText = [Error],  // Original error text
     jobName = [Job Name],  // Job name to filter the tool list
@@ -13,17 +14,12 @@ let
     toolIdWords = 
         List.Select(wordList, each Text.StartsWith(Text.Trim(_), "ToolId")),
 
-    // Step 3: Create a lookup dictionary for Tool IDs and Tool Names from the ToolList
-    toolLookup = 
-        let
-            filteredTools = Table.SelectRows(ToolList, each [Job Name] = jobName),
-            toolIdToName = 
-                List.Transform(filteredTools[Tool ID], each 
-                    [ToolId = Text.From([Tool ID]), ToolName = [Tool Name]]),
-            toolDictionary = 
-                List.ToDictionary(toolIdToName, each _[ToolId], each _[ToolName])
-        in
-            toolDictionary,
+    // Step 3: Create a list of Tool IDs and Tool Names from the ToolList
+    toolListFiltered = 
+        Table.SelectRows(ToolList, each [Job Name] = jobName),
+    toolIdToNameList = 
+        List.Transform(toolListFiltered[Tool ID], each 
+            [ToolId = Text.From([Tool ID]), ToolName = [Tool Name]]),
 
     // Step 4: Prepare the transformed list of Tool ID replacements
     transformToolIds = 
@@ -31,7 +27,13 @@ let
             let
                 toolIdFull = Text.Trim(_),   // "ToolId 2501"
                 toolIdNumber = Text.Trim(Text.AfterDelimiter(toolIdFull, "ToolId ")), // Extract just "2501"
-                toolNameFound = if Record.HasField(toolLookup, toolIdNumber) then toolLookup[toolIdNumber] else null,
+                
+                // Custom lookup function to find the Tool Name
+                toolNameFound = 
+                    try 
+                        List.First(List.Select(toolIdToNameList, each _[ToolId] = toolIdNumber))[ToolName] 
+                    otherwise null,
+
                 replacementText = if toolNameFound <> null then toolIdFull & " (Tool Name - " & toolNameFound & ")" else toolIdFull
             in
                 [Original = toolIdFull, Replacement = replacementText]
@@ -42,6 +44,10 @@ let
         List.Accumulate(transformToolIds, errorText, (state, current) => Text.Replace(state, current[Original], current[Replacement]))
 in
     updatedError
+
+
+
+
 
 
 
