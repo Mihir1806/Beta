@@ -2,48 +2,59 @@ let
     errorText = [Error],  // Original error text
     jobName = [Job Name],  // Job name to filter the tool list
 
-    // Step 1: Break Error Text into Words
+    // Step 1: Break Error Text into Words and extract ToolId
     wordList = 
         if errorText <> null then 
             Text.SplitAny(errorText, " ,;:.") 
         else 
             {},
 
-    // Step 2: Pick only words that start with "ToolId"
+    // Step 2: Select only words that contain "ToolId" and extract the number after "ToolId"
     toolIdWords = 
         List.Select(wordList, each Text.StartsWith(Text.Trim(_), "ToolId")),
+    toolIds = 
+        List.Transform(toolIdWords, each Text.Trim(Text.AfterDelimiter(_, "ToolId "))),  // Extract numbers like "2501" or "2502"
 
-    // Step 3: Create a list of Tool IDs and Tool Names from the ToolList
+    // Step 3: Filter ToolList for matching Job Name and retrieve Tool IDs and Names
     toolListFiltered = 
-        Table.SelectRows(ToolList, each Text.Trim([Job Name]) = Text.Trim(jobName)),  // Trim Job Name for comparison
+        Table.SelectRows(ToolList, each Text.Trim([Job Name]) = Text.Trim(jobName)),  // Filter by Job Name
     toolIdToNameList = 
         List.Transform(toolListFiltered[Tool ID], each 
-            [ToolId = Text.Trim([Tool ID]), ToolName = Text.Trim([Tool Name])]),  // Trim Tool ID and Tool Name
+            [ToolId = Text.Trim([Tool ID]), ToolName = Text.Trim([Tool Name])]),  // Prepare a list of Tool IDs and Tool Names
 
-    // Step 4: Prepare the transformed list of Tool ID replacements
+    // Step 4: Prepare the transformed list of Tool ID replacements in the format "ToolId 2501 (Tool Name - Container)"
     transformToolIds = 
-        List.Transform(toolIdWords, each 
+        List.Transform(toolIds, each 
             let
-                toolIdFull = Text.Trim(_),   // "ToolId 2501"
-                toolIdNumber = Text.Trim(Text.AfterDelimiter(toolIdFull, "ToolId ")), // Extract just "2501"
+                toolIdFull = "ToolId " & _ ,   // Full Tool ID like "ToolId 2501"
+                toolIdNumber = Text.Trim(_),   // Numeric part like "2501"
                 
-                // Custom lookup function to find the Tool Name
+                // Find corresponding Tool Name from the ToolList
                 toolNameFound = 
                     let
                         matchedTool = List.First(List.Select(toolIdToNameList, each Text.Trim(Text.AfterDelimiter(_[ToolId], "ToolId ")) = toolIdNumber), null)
                     in
                         if matchedTool <> null then matchedTool[ToolName] else null,
-
-                replacementText = if toolNameFound <> null then toolIdFull & " (Tool Name - " & toolNameFound & ")" else toolIdFull
+                
+                replacementText = 
+                    if toolNameFound <> null then toolIdFull & " (" & toolNameFound & ")" else toolIdFull  // Format as ToolId 2501 (Tool Name - Container)
             in
-                [Original = toolIdFull, Replacement = replacementText]
+                [Original = toolIdFull & ":", Replacement = replacementText]  // Add ":" to the original to match error format
         ),
 
-    // Step 5: Replace Tool IDs with their corresponding Tool Names in the error text
+    // Step 5: Replace the ToolId with its name and format in the error text
     updatedError = 
         List.Accumulate(transformToolIds, errorText, (state, current) => Text.Replace(state, current[Original], current[Replacement]))
 in
     updatedError
+
+
+
+
+
+
+
+
 
 
 
