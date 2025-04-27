@@ -1,246 +1,46 @@
-import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
-import pandas as pd
-from datetime import datetime, timedelta
-import webbrowser
-import os
+let
+    errorText = [Error],  // Original error text
+    jobName = [Job Name],  // Job name to filter the tool list
 
-class JobDashboard:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Job Analytics Dashboard")
-        self.root.geometry("1000x700")
-        self.root.configure(bg='#f0f2f5')
-        
-        # Load data from Excel
-        self.df = self.load_excel_data()
-        if self.df is None:
-            return
-            
-        self.df['Received_Date'] = pd.to_datetime(self.df['Received_Date']).dt.date
-        self.filtered_df = self.df.copy()
-        
-        # Configure styles
-        self.configure_styles()
-        
-        # Create UI frames
-        self.create_header()
-        self.create_filters()
-        self.create_status_overview()
-        self.create_job_table()
-        
-    def configure_styles(self):
-        style = ttk.Style()
-        style.theme_use('clam')
-        
-        # Configure colors
-        style.configure('TFrame', background='#f0f2f5')
-        style.configure('Header.TFrame', background='#2c3e50')
-        style.configure('Filter.TFrame', background='#ffffff', relief=tk.RAISED, borderwidth=1)
-        style.configure('Status.TFrame', background='#ffffff', relief=tk.RAISED, borderwidth=1)
-        style.configure('Table.TFrame', background='#ffffff', relief=tk.RAISED, borderwidth=1)
-        
-        # Button styles
-        style.configure('Filter.TButton', font=('Segoe UI', 9), padding=5)
-        style.configure('Success.TButton', background='#4CAF50', foreground='white', font=('Segoe UI', 9, 'bold'))
-        style.configure('Failure.TButton', background='#F44336', foreground='white', font=('Segoe UI', 9, 'bold'))
-        style.configure('Total.TButton', background='#2196F3', foreground='white', font=('Segoe UI', 9, 'bold'))
-        
-        # Label styles
-        style.configure('Title.TLabel', font=('Segoe UI', 16, 'bold'), background='#2c3e50', foreground='white')
-        style.configure('Section.TLabel', font=('Segoe UI', 12, 'bold'), background='#ffffff', foreground='#2c3e50')
-    
-    def load_excel_data(self):
-        try:
-            df = pd.read_excel("job_status_report.xlsx")
-            required_columns = ['Job_Name', 'Status', 'Execution_Time', 'Path', 'Received_Date']
-            
-            if not all(col in df.columns for col in required_columns):
-                messagebox.showerror("Error", "Excel file missing required columns!")
-                return None
+    // Step 1: Break Error Text into Words
+    wordList = 
+        if errorText <> null then 
+            Text.SplitAny(errorText, " ,;:.") 
+        else 
+            {},
+
+    // Step 2: Pick only words that start with "ToolId"
+    toolIdWords = 
+        List.Select(wordList, each Text.StartsWith(Text.Trim(_), "ToolId")),
+
+    // Step 3: Create a list of Tool IDs and Tool Names from the ToolList
+    toolListFiltered = 
+        Table.SelectRows(ToolList, each [Job Name] = jobName),
+    toolIdToNameList = 
+        List.Transform(toolListFiltered[Tool ID], each 
+            [ToolId = Text.From([Tool ID]), ToolName = [Tool Name]]),
+
+    // Step 4: Prepare the transformed list of Tool ID replacements
+    transformToolIds = 
+        List.Transform(toolIdWords, each 
+            let
+                toolIdFull = Text.Trim(_),   // "ToolId 2501"
+                toolIdNumber = Text.Trim(Text.AfterDelimiter(toolIdFull, "ToolId ")), // Extract just "2501"
                 
-            return df
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load Excel file:\n{str(e)}")
-            return None
-    
-    def create_header(self):
-        header_frame = ttk.Frame(self.root, style='Header.TFrame')
-        header_frame.pack(fill=tk.X, padx=10, pady=(10, 0))
-        
-        ttk.Label(header_frame, text="Job Analytics Dashboard", style='Title.TLabel').pack(side=tk.LEFT, padx=10)
-        
-    def create_filters(self):
-        filter_frame = ttk.Frame(self.root, style='Filter.TFrame')
-        filter_frame.pack(fill=tk.X, padx=10, pady=10)
-        
-        ttk.Label(filter_frame, text="FILTER", font=('Segoe UI', 10, 'bold')).pack(side=tk.LEFT, padx=10)
-        
-        # Date filter buttons
-        ttk.Button(filter_frame, text="Today", style='Filter.TButton', 
-                  command=lambda: self.filter_dates(0)).pack(side=tk.LEFT, padx=5)
-        ttk.Button(filter_frame, text="7 Days", style='Filter.TButton',
-                  command=lambda: self.filter_dates(7)).pack(side=tk.LEFT, padx=5)
-        ttk.Button(filter_frame, text="30 Days", style='Filter.TButton',
-                  command=lambda: self.filter_dates(30)).pack(side=tk.LEFT, padx=5)
-        
-        ttk.Label(filter_frame, text="Custom Range").pack(side=tk.LEFT, padx=(20,5))
-        
-        # Custom date entry (simplified for demo)
-        self.start_entry = ttk.Entry(filter_frame, width=10)
-        self.start_entry.pack(side=tk.LEFT, padx=5)
-        ttk.Label(filter_frame, text="to").pack(side=tk.LEFT)
-        self.end_entry = ttk.Entry(filter_frame, width=10)
-        self.end_entry.pack(side=tk.LEFT, padx=5)
-        ttk.Button(filter_frame, text="Apply", command=self.apply_custom_range).pack(side=tk.LEFT)
-    
-    def create_status_overview(self):
-        status_frame = ttk.Frame(self.root, style='Status.TFrame')
-        status_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
-        
-        ttk.Label(status_frame, text="Job Status Overview", style='Section.TLabel').pack(anchor=tk.W, padx=10, pady=5)
-        
-        # Status widgets
-        inner_frame = ttk.Frame(status_frame)
-        inner_frame.pack(fill=tk.X, padx=10, pady=(0, 10))
-        
-        # Success widget
-        self.success_frame = ttk.Frame(inner_frame, style='Success.TButton')
-        self.success_frame.pack(side=tk.LEFT, padx=5, ipadx=20, ipady=10)
-        ttk.Label(self.success_frame, text="Success", foreground='white', 
-                 font=('Segoe UI', 10, 'bold'), background='#4CAF50').pack()
-        self.success_count = ttk.Label(self.success_frame, text="0", foreground='white', 
-                                      font=('Segoe UI', 14, 'bold'), background='#4CAF50')
-        self.success_count.pack()
-        
-        # Failure widget
-        self.failure_frame = ttk.Frame(inner_frame, style='Failure.TButton')
-        self.failure_frame.pack(side=tk.LEFT, padx=5, ipadx=20, ipady=10)
-        ttk.Label(self.failure_frame, text="Failure", foreground='white', 
-                 font=('Segoe UI', 10, 'bold'), background='#F44336').pack()
-        self.failure_count = ttk.Label(self.failure_frame, text="0", foreground='white', 
-                                      font=('Segoe UI', 14, 'bold'), background='#F44336')
-        self.failure_count.pack()
-        
-        # Total widget
-        self.total_frame = ttk.Frame(inner_frame, style='Total.TButton')
-        self.total_frame.pack(side=tk.LEFT, padx=5, ipadx=20, ipady=10)
-        ttk.Label(self.total_frame, text="Total", foreground='white', 
-                 font=('Segoe UI', 10, 'bold'), background='#2196F3').pack()
-        self.total_count = ttk.Label(self.total_frame, text="0", foreground='white', 
-                                   font=('Segoe UI', 14, 'bold'), background='#2196F3')
-        self.total_count.pack()
-        
-        # Add clickable behavior
-        for frame, status in [(self.success_frame, "Success"), (self.failure_frame, "Failure"), (self.total_frame, "Total")]:
-            frame.bind("<Button-1>", lambda e, s=status: self.filter_status(s))
-            for child in frame.winfo_children():
-                child.bind("<Button-1>", lambda e, s=status: self.filter_status(s))
-        
-        self.update_status_counts()
-    
-    def create_job_table(self):
-        table_frame = ttk.Frame(self.root, style='Table.TFrame')
-        table_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
-        
-        ttk.Label(table_frame, text="Job Details", style='Section.TLabel').pack(anchor=tk.W, padx=10, pady=5)
-        
-        # Create treeview
-        self.tree = ttk.Treeview(table_frame, columns=("Job_Name", "Status", "Execution_Time", "Path"), 
-                                show="headings", selectmode="browse")
-        
-        # Configure columns
-        columns = {
-            "Job_Name": {"text": "JOB NAME", "width": 250},
-            "Status": {"text": "STATUS", "width": 100},
-            "Execution_Time": {"text": "EXECUTION TIME", "width": 150},
-            "Path": {"text": "PATH", "width": 300}
-        }
-        
-        for col, config in columns.items():
-            self.tree.heading(col, text=config["text"])
-            self.tree.column(col, width=config["width"])
-        
-        # Add scrollbar
-        scrollbar = ttk.Scrollbar(table_frame, orient=tk.VERTICAL, command=self.tree.yview)
-        self.tree.configure(yscrollcommand=scrollbar.set)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        self.tree.pack(fill=tk.BOTH, expand=True, padx=10, pady=(0, 10))
-        
-        # Bind double-click event for paths
-        self.tree.bind("<Double-1>", self.open_path)
-        
-        # Populate initial data
-        self.update_table()
-    
-    def filter_dates(self, days):
-        today = datetime.now().date()
-        if days > 0:
-            start_date = today - timedelta(days=days)
-            self.filtered_df = self.df[self.df['Received_Date'] >= start_date]
-        else:  # Today
-            self.filtered_df = self.df[self.df['Received_Date'] == today]
-        
-        self.update_display()
-    
-    def apply_custom_range(self):
-        try:
-            start_date = datetime.strptime(self.start_entry.get(), "%Y-%m-%d").date()
-            end_date = datetime.strptime(self.end_entry.get(), "%Y-%m-%d").date()
-            self.filtered_df = self.df[(self.df['Received_Date'] >= start_date) & 
-                                     (self.df['Received_Date'] <= end_date)]
-            self.update_display()
-        except ValueError:
-            messagebox.showerror("Error", "Invalid date format! Use YYYY-MM-DD")
-    
-    def filter_status(self, status):
-        if status == "Total":
-            self.filtered_df = self.df.copy()
-        else:
-            self.filtered_df = self.df[self.df['Status'] == status]
-        self.update_display()
-    
-    def update_display(self):
-        self.update_status_counts()
-        self.update_table()
-    
-    def update_status_counts(self):
-        success = len(self.filtered_df[self.filtered_df['Status'] == 'Success'])
-        failure = len(self.filtered_df[self.filtered_df['Status'] == 'Failure'])
-        total = len(self.filtered_df)
-        
-        self.success_count.config(text=str(success))
-        self.failure_count.config(text=str(failure))
-        self.total_count.config(text=str(total))
-    
-    def update_table(self):
-        # Clear existing data
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-            
-        # Add filtered data
-        for _, row in self.filtered_df.iterrows():
-            self.tree.insert("", tk.END, values=(
-                row['Job_Name'],
-                row['Status'],
-                row['Execution_Time'],
-                row['Path']
-            ))
-    
-    def open_path(self, event):
-        item = self.tree.selection()[0]
-        path = self.tree.item(item, "values")[3]
-        
-        if pd.notna(path):
-            if path.startswith(('http:', 'https:')):  # Web URL
-                webbrowser.open(path)
-            else:  # Local path
-                try:
-                    os.startfile(path) if os.name == 'nt' else webbrowser.open(f"file://{os.path.abspath(path)}")
-                except:
-                    messagebox.showerror("Error", f"Could not open path:\n{path}")
+                // Custom lookup function to find the Tool Name
+                toolNameFound = 
+                    let
+                        matchedTool = List.First(List.Select(toolIdToNameList, each _[ToolId] = toolIdNumber), null)
+                    in
+                        if matchedTool <> null then matchedTool[ToolName] else null,
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = JobDashboard(root)
-    root.mainloop()
+                replacementText = if toolNameFound <> null then toolIdFull & " (Tool Name - " & toolNameFound & ")" else toolIdFull
+            in
+                [Original = toolIdFull, Replacement = replacementText]
+        ),
+
+    // Step 5: Replace Tool IDs with their corresponding Tool Names in the error text
+    updatedError = 
+        List.Accumulate(transformToolIds, errorText, (state, current) => Text.Replace(state, current[Original], current[Replacement]))
+in
+    updatedError
