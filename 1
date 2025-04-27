@@ -13,24 +13,25 @@ let
     toolIdWords = 
         List.Select(wordList, each Text.StartsWith(Text.Trim(_), "ToolId")),
 
-    // Step 3: Create a list of Tool IDs and Tool Names from the ToolList
+    // Step 3: Extract the numeric part of the Tool ID from ToolList
     toolListFiltered = 
-        Table.SelectRows(ToolList, each [Job Name] = jobName),
+        Table.SelectRows(ToolList, each Text.Trim([Job Name]) = Text.Trim(jobName)),  // Trim Job Name for comparison
     toolIdToNameList = 
         List.Transform(toolListFiltered[Tool ID], each 
-            [ToolId = Text.From([Tool ID]), ToolName = [Tool Name]]),
+            [ToolId = Text.From([Tool ID]), ToolName = Text.Trim([Tool Name])]),  // Keep Tool ID as text, and trim Tool Name
 
-    // Step 4: Prepare the transformed list of Tool ID replacements
+    // Step 4: Extract just the numeric part of the Tool ID for comparison
     transformToolIds = 
         List.Transform(toolIdWords, each 
             let
                 toolIdFull = Text.Trim(_),   // "ToolId 2501"
                 toolIdNumber = Text.Trim(Text.AfterDelimiter(toolIdFull, "ToolId ")), // Extract just "2501"
+                numericToolId = Text.Select(toolIdNumber, {"0".."9"}), // Extract digits only
                 
-                // Custom lookup function to find the Tool Name
+                // Custom lookup function to find the Tool Name using only the numeric part of the Tool ID
                 toolNameFound = 
                     let
-                        matchedTool = List.First(List.Select(toolIdToNameList, each _[ToolId] = toolIdNumber), null)
+                        matchedTool = List.First(List.Select(toolIdToNameList, each Text.Select(_[ToolId], {"0".."9"}) = numericToolId), null)
                     in
                         if matchedTool <> null then matchedTool[ToolName] else null,
 
