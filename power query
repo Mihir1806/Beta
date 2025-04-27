@@ -50,3 +50,9 @@
 otherwise null
 
 
+
+
+= if Text.Contains([Subject], "IN_") then "IN" 
+  else if Text.Contains([Subject], "ID_") then "ID" 
+  else null
+
