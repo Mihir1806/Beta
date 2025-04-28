@@ -7,15 +7,14 @@ let
     // Step 2: Expand the ToolList columns (Tool ID and Tool Name) into LOG_STATUS
     ExpandedTable = Table.ExpandTableColumn(MergedTable, "ToolList", {"Tool ID", "Tool Name"}, {"Tool ID", "Tool Name"}),
 
-    // Step 3: Group by Job Name to handle multiple Tool IDs for the same Job Name
-    GroupedTable = Table.Group(ExpandedTable, {"Job Name", "Error"}, {
-        {"ToolDetails", each Text.Combine(List.Transform([Tool ID], 
-            each "Tool ID " & Text.From(_) & " (Tool Name: " & List.First([Tool Name]) & ")"), ", "), type text}
-    }),
+    // Step 3: Add a custom column that formats the output as "Error ToolId <ToolId>: <Error>"
+    AddCustomColumn = Table.AddColumn(ExpandedTable, "FormattedError", each 
+        "Error ToolId " & Text.From([Tool ID]) & ": " & [Error]),
 
-    // Step 4: Add a custom column to format Tool IDs, Tool Names, and Errors
-    AddCustomColumn = Table.AddColumn(GroupedTable, "CustomColumn", each 
-        [ToolDetails] & ": " & [Error])
+    // Step 4: Group by Job Name and aggregate the formatted errors into a single cell per Job Name
+    GroupedTable = Table.Group(AddCustomColumn, {"Job Name"}, {
+        {"AllErrors", each Text.Combine([FormattedError], "#(lf)"), type text}
+    })
 
 in
-    AddCustomColumn
+    GroupedTable
