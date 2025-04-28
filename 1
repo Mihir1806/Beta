@@ -10,6 +10,7 @@ let
     // Lookup corresponding ID_Name for each JT value from ToolList
     ReplaceWithIDName = List.Transform(JT_Split, each 
         let
+            // Lookup the matching row in the ToolList table
             matchedRow = Table.SelectRows(ToolList, (row) => row[JT] = Text.Trim(each)),
             IDName = if Table.IsEmpty(matchedRow) then "" else matchedRow{0}[ID_Name]
         in
