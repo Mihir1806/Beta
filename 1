@@ -3,6 +3,22 @@ let
     extracted = List.Transform(
         List.Skip(parts, 1),
         each Text.BeforeDelimiter(Text.TrimStart(_), ":")
+    ),
+    distinctValues = List.Distinct(extracted),
+    combined = List.Transform(distinctValues, each [Job Name] & "-" & _)
+in
+    Text.Combine(combined, "; ")
+
+
+
+
+
+
+let
+    parts = Text.Split([Error1], "ToolId "),
+    extracted = List.Transform(
+        List.Skip(parts, 1),
+        each Text.BeforeDelimiter(Text.TrimStart(_), ":")
     )
 in
     Text.Combine(extracted, "; ")
