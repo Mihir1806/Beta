@@ -1,41 +1,38 @@
 let
-    // Assume LOG_STATUS is your main table and ToolList is your reference table
-    Source = LOG_STATUS,
-    
-    // First, extract Tool ID from Error column if it exists
-    // Assuming Error format is something like "ToolId 123: Error message"
-    // Adjust the pattern if your Error format is different
-    AddedToolID = Table.AddColumn(Source, "Tool ID", each 
-        if [Error] = null then null
-        else if Text.Contains([Error], "ToolId") then 
-            let 
-                toolIdStart = Text.PositionOf([Error], "ToolId") + 7,
-                toolIdEnd = Text.PositionOf([Error], ":", toolIdStart),
-                toolId = Text.Middle([Error], toolIdStart, toolIdEnd - toolIdStart)
-            in 
-                Text.Trim(toolId)
-        else null, type text),
-    
-    // Merge with ToolList to get Tool Names
-    MergedWithToolList = Table.NestedJoin(AddedToolID, {"Job Name", "Tool ID"}, ToolList, {"Job Name", "Tool ID"}, "ToolList", JoinKind.LeftOuter),
-    ExpandedToolList = Table.ExpandTableColumn(MergedWithToolList, "ToolList", {"Tool Name"}, {"Tool Name"}),
-    
-    // Create formatted error message
-    AddedFormattedError = Table.AddColumn(ExpandedToolList, "Formatted Error", each 
-        if [Error] = null then null
-        else if [Tool Name] = null then 
-            "Error " & Text.Middle([Error], Text.PositionOf([Error], "ToolId"), Text.Length([Error]) - Text.PositionOf([Error], "ToolId") + 1)
-        else
-            "Error " & Text.Middle([Error], Text.PositionOf([Error], "ToolId"), Text.PositionOf([Error], ":") - Text.PositionOf([Error], "ToolId") + 1) & 
-            ": " & Text.AfterDelimiter([Error], ":") & " (Tool Name: " & [Tool Name] & ")", type text),
-    
-    // Group by Job Name and combine errors
-    GroupedByJob = Table.Group(AddedFormattedError, {"Job Name"}, {
-        {"Combined Errors", each Text.Combine([Formatted Error], "#(lf)"), type text}
-    }),
-    
-    // Merge back with original LOG_STATUS to keep all rows
-    // (if you want to keep all original rows, not just grouped ones)
-    FinalTable = Table.Join(Source, "Job Name", GroupedByJob, "Job Name", JoinKind.LeftOuter)
+    ToolList = ... // reference your ToolList table here
 in
-    FinalTable
+    Table.AddColumn(
+        LOG_STATUS,
+        "Enhanced Error",
+        each 
+        let
+            errorText = [Error],
+            jobName = [Job Name],
+            toolIDs = Text.Select(errorText, {"0".."9", "-", " ", "T", "o", "l", "d", "I", ":"}),
+            toolIDMatches = List.Transform(
+                List.Distinct(Text.RegexReplace(errorText, "[^\d]+", " ") |> Text.Trim() |> Text.Split(" ")),
+                each Text.From(_)
+            ),
+            enhancedText = List.Accumulate(
+                toolIDMatches,
+                errorText,
+                (state, currentToolId) =>
+                    let
+                        toolName = try Record.Field(
+                                        Record.SelectFirst(
+                                            Table.SelectRows(ToolList, each [Job Name] = jobName and Text.From([Tool ID]) = currentToolId),
+                                            each true
+                                        ), "Tool Name"
+                                    ) otherwise null
+                    in
+                        if toolName <> null then
+                            Text.Replace(state, 
+                                "ToolId " & currentToolId, 
+                                "ToolId " & currentToolId & "(Tool Name : " & toolName & ")"
+                            )
+                        else
+                            state
+            )
+        in
+            enhancedText
+    )
