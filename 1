@@ -1,17 +1,25 @@
 let
     // Assuming ToolList and LOG_STATUS are already loaded into Power Query
 
-    // Step 1: Merge the LOG_STATUS table with ToolList based on Job Name
-    MergedTable = Table.NestedJoin(LOG_STATUS, {"Job Name"}, ToolList, {"Job Name"}, "ToolList", JoinKind.LeftOuter),
-    
-    // Step 2: Expand the ToolList columns (Tool ID and Tool Name) into LOG_STATUS
-    ExpandedTable = Table.ExpandTableColumn(MergedTable, "ToolList", {"Tool ID", "Tool Name"}, {"Tool ID", "Tool Name"}),
+    // Step 1: Filter ToolList by Job Name to keep only relevant rows
+    FilteredToolList = Table.SelectRows(ToolList, each List.Contains(LOG_STATUS[Job Name], [Job Name])),
 
-    // Step 3: Add a custom column that formats the output as "Error ToolId <ToolId>: <Error>"
-    AddCustomColumn = Table.AddColumn(ExpandedTable, "FormattedError", each 
-        "Error ToolId " & Text.From([Tool ID]) & ": " & [Error]),
+    // Step 2: Add Custom Column to LOG_STATUS to lookup ToolName based on ToolId and Job Name
+    AddToolNameColumn = Table.AddColumn(LOG_STATUS, "ToolName", each 
+        let
+            // Filter ToolList to get rows matching the current Job Name and Tool ID
+            RelevantTools = Table.SelectRows(FilteredToolList, each [Job Name] = [Job Name] and [Tool ID] = [Tool ID]),
+            // Extract the Tool Name from the filtered table (if available)
+            ToolName = if Table.RowCount(RelevantTools) > 0 then RelevantTools{0}[Tool Name] else null
+        in
+            ToolName
+    ),
 
-    // Step 4: Group by Job Name and aggregate the formatted errors into a single cell per Job Name
+    // Step 3: Add Custom Column to format the error message
+    AddCustomColumn = Table.AddColumn(AddToolNameColumn, "FormattedError", each 
+        "Error ToolId " & Text.From([Tool ID]) & ": " & [Error] & (if [ToolName] <> null then " (Tool Name: " & [ToolName] & ")" else "")),
+
+    // Step 4: Group by Job Name and aggregate all errors for each Job Name
     GroupedTable = Table.Group(AddCustomColumn, {"Job Name"}, {
         {"AllErrors", each Text.Combine([FormattedError], "#(lf)"), type text}
     })
