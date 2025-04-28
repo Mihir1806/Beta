@@ -1,31 +1,25 @@
-let
-    jobName = [Job Name],
-    errorText = [Error],
-
-    toolIdPart = 
-        if errorText <> null and Text.Contains(errorText, "ToolId") then
-            let
-                afterToolId = Text.AfterDelimiter(errorText, "ToolId "),
-                idText = Text.BeforeDelimiter(afterToolId, ":"),
-                toolIdNumber = try Number.FromText(Text.Trim(idText)) otherwise null
-            in
-                toolIdNumber
-        else
-            null,
-
-    toolName = 
-        if toolIdPart <> null then
-            let
-                match = Table.SelectRows(ToolList, each [Job Name] = jobName and [Tool ID] = toolIdPart)
-            in
-                if Table.RowCount(match) > 0 then match{0}[Tool Name] else null
-        else
-            null,
-
-    finalError = 
-        if toolIdPart <> null and toolName <> null then
-            Text.Replace(errorText, "ToolId " & Text.From(toolIdPart), "ToolId " & Text.From(toolIdPart) & " (Tool Name- " & toolName & ")")
-        else
-            errorText
+= try let
+    CurrentJobName = [Job Name],
+    ErrorLines = Splitter.SplitTextByDelimiter(Character.LineFeed)([Error]),
+    EnhancedErrorLines = List.Transform(ErrorLines, each
+        let
+            ToolIdPattern = "ToolId (\\d+)",
+            MatchingToolIdList = Text.Select(Text.Split(_, " "), {"0".."9"}),
+            FirstToolId = if List.Count(MatchingToolIdList) > 0 then MatchingToolIdList{0} else null,
+            ToolName = if FirstToolId <> null then
+                let
+                    MatchingTool = Table.First(Table.SelectRows(ToolList, each [Job Name] = CurrentJobName and [Tool ID] = FirstToolId))
+                in
+                    if MatchingTool <> null then MatchingTool[Tool Name] else null
+            else
+                null,
+            EnhancedLine = if FirstToolId <> null then
+                Text.Replace(_, "ToolId " & FirstToolId, "ToolId " & FirstToolId & (if ToolName <> null then " (" & ToolName & ")" else ""))
+            else
+                _
+        in
+            EnhancedLine
+    ),
+    CustomErrorMessage = Text.Combine(EnhancedErrorLines, Character.LineFeed)
 in
-    finalError
+    CustomErrorMessage otherwise [Error]
