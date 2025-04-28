@@ -1,3 +1,22 @@
+
+let
+    SplitText = Text.Split([LOG_STATUS], "ToolId"),
+    ExtractNumbers = List.Transform(List.Skip(SplitText, 1), each Text.Start(_, Text.PositionOf(_, ":"))),
+    Result = Text.Combine(ExtractNumbers, ", ")
+in
+    Result
+
+
+
+
+
+
+
+
+
+
+
+
 let
     // Load your table (replace with your actual table name)
     Source = YourTableName,  // Replace YourTableName with your actual table name
