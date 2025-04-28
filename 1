@@ -2,10 +2,9 @@ let
     jobName = [Job Name],
     errorText = [Error],
     toolTable = Table.SelectRows(ToolList, each [Job Name] = jobName),
-    matches = List.Transform(
-        Text.RegexReplace(errorText, "[^\d]+", " ") |> Text.Trim() |> Text.Split(" "),
-        each Text.From(_)
-    ),
+    numbersText = Text.RegexReplace(errorText, "[^\d]+", " "),
+    numbersList = Text.Split(Text.Trim(numbersText), " "),
+    matches = List.Transform(numbersList, each Text.From(_)),
     enhancedError = List.Accumulate(
         List.Distinct(matches),
         errorText,
