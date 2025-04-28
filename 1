@@ -1,34 +1,42 @@
 let
-    // Step 1: Filter ToolList by Job Name to keep only relevant rows
-    FilteredToolList = Table.SelectRows(ToolList, each List.Contains(LOG_STATUS[Job Name], [Job Name])),
+    // Source the LOG_STATUS table
+    Source = Excel.CurrentWorkbook(){[Name="LOG_STATUS"]}[Content],
+    #"Changed Type" = Table.TransformColumnTypes(Source,{{"Job Name", type text}, {"Error", type text}}),
 
-    // Step 2: Add Custom Column to LOG_STATUS to lookup ToolName based on ToolId and Job Name only when there is an error
-    AddToolNameColumn = Table.AddColumn(LOG_STATUS, "ToolName", each 
+    // Source the ToolList table
+    ToolListSource = Excel.CurrentWorkbook(){[Name="ToolList"]}[Content],
+    #"Changed Type1" = Table.TransformColumnTypes(ToolListSource,{{"Job Name", type text}, {"Tool ID", Int64.Type}, {"Tool Name", type text}}),
+
+    // Merge ToolList with LOG_STATUS to bring in Tool ID
+    #"Merged Queries" = Table.NestedJoin(#"Changed Type", {"Job Name"}, #"Changed Type1", {"Job Name"}, "ToolListInfo", JoinKind.LeftOuter),
+    #"Expanded ToolListInfo" = Table.ExpandTableColumn(#"Merged Queries", "ToolListInfo", {"Tool ID"}, {"Tool ID"}),
+
+    // Add the custom error column
+    #"Added Custom" = Table.AddColumn(#"Expanded ToolListInfo", "Formatted Error", each
         if [Error] <> null then
             let
-                // Filter ToolList to get rows matching the current Job Name and Tool ID
-                RelevantTools = Table.SelectRows(FilteredToolList, each [Job Name] = [Job Name] and [Tool ID] = [Tool ID]),
-                // Extract the Tool Name from the filtered table (if available)
-                ToolName = if Table.RowCount(RelevantTools) > 0 then RelevantTools{0}[Tool Name] else null
+                currentJobID = [Job Name],
+                currentToolID = [Tool ID],
+                toolNameRecord = Table.SelectRows(#"Changed Type1", (row) => row[#"Job Name"] = currentJobID and row[#"Tool ID"] = currentToolID),
+                toolName = if Table.IsEmpty(toolNameRecord) then null else toolNameRecord{0}[#"Tool Name"],
+                errorText = if toolName <> null then
+                    Text.Format("Error ToolId <0>: <1> (Tool Name: <2>)", {[Tool ID], [Error], toolName})
+                else
+                    Text.Format("Error ToolId <0>: <1>", {[Tool ID], [Error]})
             in
-                ToolName
+                errorText
         else
             null
     ),
 
-    // Step 3: Add a Custom Column to format the error message as "Error ToolId <ToolId>: <Error>"
-    AddFormattedErrorColumn = Table.AddColumn(AddToolNameColumn, "FormattedError", each 
-        if [Error] <> null then
-            "Error ToolId " & Text.From([Tool ID]) & ": " & [Error] & 
-            (if [ToolName] <> null then " (Tool Name: " & [ToolName] & ")" else "")
-        else
-            null
-    ),
+    // Group by Job Name and aggregate the errors
+    #"Grouped Rows" = Table.Group(#"Added Custom", {"Job Name"}, {
+        {"Combined Errors", each Text.Combine(List.RemoveNulls([Formatted Error]), "#(lf)"), type text}
+    }),
 
-    // Step 4: Group by Job Name to aggregate all errors for each Job Name in a single cell, separated by a new line
-    GroupedTable = Table.Group(AddFormattedErrorColumn, {"Job Name"}, {
-        {"AllErrors", each Text.Combine(List.RemoveNulls([FormattedError]), "#(lf)"), type text}
-    })
+    // Merge the combined errors back into the original LOG_STATUS table
+    #"Merged with Grouped Errors" = Table.NestedJoin(#"Changed Type", {"Job Name"}, #"Grouped Rows", {"Job Name"}, "ErrorDetails", JoinKind.LeftOuter),
+    #"Expanded ErrorDetails" = Table.ExpandTableColumn(#"Merged with Grouped Errors", "ErrorDetails", {"Combined Errors"}, {"Combined Errors"})
 
 in
-    GroupedTable
+    #"Expanded ErrorDetails"
