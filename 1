@@ -1,3 +1,30 @@
+
+let
+    // Reference the main table and ToolList table
+    MainTable = YourMainTable, // Replace with your main table name
+    ToolList = ToolList, // Replace with your ToolList table name
+
+    // Split the JT values from the main table by "; "
+    JT_Split = Text.Split([Error1], ";"),
+
+    // Lookup corresponding ID_Name for each JT value from ToolList
+    ReplaceWithIDName = List.Transform(JT_Split, each 
+        let
+            matchedRow = Table.SelectRows(ToolList, (row) => row[JT] = Text.Trim(each)),
+            IDName = if Table.IsEmpty(matchedRow) then "" else matchedRow{0}[ID_Name]
+        in
+            IDName
+    ),
+    
+    // Combine the replaced ID_Name values into one string with "; "
+    Result = Text.Combine(ReplaceWithIDName, "; ")
+in
+    Result
+
+
+
+
+
 let
     // Reference the Job Name column
     JobName = [Job Name],
