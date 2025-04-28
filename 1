@@ -1,5 +1,25 @@
 
 let
+    // Split the Error1 column by "ToolId"
+    SplitText = Text.Split([Error1], "ToolId"),
+    // Skip the first part of the split since it won't contain any numbers
+    ExtractNumbers = List.Transform(List.Skip(SplitText, 1), 
+        each Text.Start(Text.AfterDelimiter(_, ":"), Text.PositionOf(Text.AfterDelimiter(_, ":"), " "))),
+    // Combine all the extracted numbers, separated by commas
+    Result = Text.Combine(ExtractNumbers, ", ")
+in
+    Result
+
+
+
+
+
+
+
+
+
+
+let
     SplitText = Text.Split([LOG_STATUS], "ToolId"),
     ExtractNumbers = List.Transform(List.Skip(SplitText, 1), each Text.Start(_, Text.PositionOf(_, ":"))),
     Result = Text.Combine(ExtractNumbers, ", ")
