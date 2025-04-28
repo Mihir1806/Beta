@@ -1,34 +1,36 @@
-import pandas as pd
+Enhanced Error = 
+VAR JobName = 'LOG_STATUS'[Job Name]
+VAR ErrorText = 'LOG_STATUS'[Error]
 
-def combine_excels(file1, sheet1, col1, file2, sheet2, lower_col, upper_col, output_file):
-    # Load the Excel files
-    df1 = pd.read_excel(file1, sheet_name=sheet1)
-    df2 = pd.read_excel(file2, sheet_name=sheet2)
-    
-    # Ensure the columns are numeric for comparison
-    df1[col1] = pd.to_numeric(df1[col1], errors='coerce')
-    df2[lower_col] = pd.to_numeric(df2[lower_col], errors='coerce')
-    df2[upper_col] = pd.to_numeric(df2[upper_col], errors='coerce')
-    
-    # Perform the conditional join efficiently
-    merged_rows = []
-    
-       # Iterate through each row in Excel A
-    for index, row in df_a.iterrows():
-        value_a = row[column_a]
-        # Check if the value in column A is between the two columns in Excel B
-        for _, row_b in df_b.iterrows():
-            if row_b[column_b1] <= value_a <= row_b[column_b2]:
-                combined_data.append({**row.to_dict(), **row_b.to_dict()})
+-- Extract Tool IDs manually (not easy in DAX, so assume error lines are simple)
+VAR ToolId1 = 
+    IF(
+        SEARCH("ToolId ", ErrorText, 1, 0) > 0,
+        MID(
+            ErrorText,
+            SEARCH("ToolId ", ErrorText, 1, 0) + 7,
+            FIND(":", ErrorText, SEARCH("ToolId ", ErrorText, 1, 0)) - (SEARCH("ToolId ", ErrorText, 1, 0) + 7)
+        ),
+        BLANK()
+    )
 
-    
-    # Convert to DataFrame if matches found
-    if merged_rows:
-        merged_df = pd.DataFrame(merged_rows)
-        merged_df.to_excel(output_file, index=False)
-        print(f"Merged file saved as {output_file}")
-    else:
-        print("No matching rows found. Output file not created.")
+VAR ToolName1 = 
+    LOOKUPVALUE(
+        'ToolList'[Tool Name],
+        'ToolList'[Job Name], JobName,
+        'ToolList'[Tool ID], VALUE(ToolId1)
+    )
 
-# Example usage
-combine_excels('file1.xlsx', 'Sheet1', 'ColumnA', 'file2.xlsx', 'Sheet1', 'LowerBound', 'UpperBound', 'merged_output.xlsx')
+VAR ReplacedError = 
+    IF(
+        NOT ISBLANK(ToolName1),
+        SUBSTITUTE(
+            ErrorText,
+            "ToolId " & ToolId1,
+            "ToolId " & ToolId1 & "(Tool Name : " & ToolName1 & ")"
+        ),
+        ErrorText
+    )
+
+RETURN
+    ReplacedError
