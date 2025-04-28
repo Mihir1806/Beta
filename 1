@@ -1,38 +1,23 @@
 let
-    ToolList = ... // reference your ToolList table here
-in
-    Table.AddColumn(
-        LOG_STATUS,
-        "Enhanced Error",
-        each 
-        let
-            errorText = [Error],
-            jobName = [Job Name],
-            toolIDs = Text.Select(errorText, {"0".."9", "-", " ", "T", "o", "l", "d", "I", ":"}),
-            toolIDMatches = List.Transform(
-                List.Distinct(Text.RegexReplace(errorText, "[^\d]+", " ") |> Text.Trim() |> Text.Split(" ")),
-                each Text.From(_)
-            ),
-            enhancedText = List.Accumulate(
-                toolIDMatches,
-                errorText,
-                (state, currentToolId) =>
-                    let
-                        toolName = try Record.Field(
-                                        Record.SelectFirst(
-                                            Table.SelectRows(ToolList, each [Job Name] = jobName and Text.From([Tool ID]) = currentToolId),
-                                            each true
-                                        ), "Tool Name"
-                                    ) otherwise null
-                    in
-                        if toolName <> null then
-                            Text.Replace(state, 
-                                "ToolId " & currentToolId, 
-                                "ToolId " & currentToolId & "(Tool Name : " & toolName & ")"
-                            )
-                        else
-                            state
-            )
-        in
-            enhancedText
+    jobName = [Job Name],
+    errorText = [Error],
+    toolTable = Table.SelectRows(ToolList, each [Job Name] = jobName),
+    matches = List.Transform(
+        Text.RegexReplace(errorText, "[^\d]+", " ") |> Text.Trim() |> Text.Split(" "),
+        each Text.From(_)
+    ),
+    enhancedError = List.Accumulate(
+        List.Distinct(matches),
+        errorText,
+        (state, toolId) =>
+            let
+                toolRow = try Table.SelectRows(toolTable, each Text.From([Tool ID]) = toolId){0} otherwise null,
+                toolName = if toolRow <> null then toolRow[Tool Name] else null
+            in
+                if toolName <> null then
+                    Text.Replace(state, "ToolId " & toolId, "ToolId " & toolId & "(Tool Name : " & toolName & ")")
+                else
+                    state
     )
+in
+    enhancedError
