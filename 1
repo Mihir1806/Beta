@@ -1,3 +1,19 @@
+let
+    parts = Text.Split([Error1], "ToolId "),
+    extracted = List.Transform(
+        List.Skip(parts, 1),
+        each Text.BeforeDelimiter(Text.TrimStart(_), ":")
+    )
+in
+    Text.Combine(extracted, "; ")
+
+
+
+
+
+
+
+
 
 let
     Source = YourSourceTable,
