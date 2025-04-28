@@ -4,14 +4,17 @@ let
     MainTable = YourMainTable, // Replace with your main table name
     ToolList = ToolList, // Replace with your ToolList table name
 
-    // Split the JT values from the main table by "; "
+    // Split the JT values from the Error1 column by "; "
     JT_Split = Text.Split([Error1], ";"),
 
     // Lookup corresponding ID_Name for each JT value from ToolList
     ReplaceWithIDName = List.Transform(JT_Split, each 
         let
+            // Remove any extra spaces from each ToolId
+            trimmedJT = Text.Trim(_),
             // Lookup the matching row in the ToolList table
-            matchedRow = Table.SelectRows(ToolList, (row) => row[JT] = Text.Trim(each)),
+            matchedRow = Table.SelectRows(ToolList, (row) => row[JT] = trimmedJT),
+            // Get the ID_Name from the matched row, or leave blank if not found
             IDName = if Table.IsEmpty(matchedRow) then "" else matchedRow{0}[ID_Name]
         in
             IDName
@@ -21,6 +24,8 @@ let
     Result = Text.Combine(ReplaceWithIDName, "; ")
 in
     Result
+
+
 
 
 
