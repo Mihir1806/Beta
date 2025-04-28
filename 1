@@ -1,27 +1,21 @@
 let
-    errorText = [Error],  // Original error text
-    jobName = [Job Name],  // Job name to filter ToolList
+    // Assuming ToolList and LOG_STATUS are already loaded into Power Query
 
-    // Step 1: Extract ToolIds from errorText
-    toolIds = List.Transform(
-                List.Select(
-                    Text.SplitAny(errorText, " ,;:."),
-                    each Text.StartsWith(Text.Trim(_), "ToolId")),
-                each Text.Trim(Text.AfterDelimiter(_, "ToolId "))
-              ),
+    // Step 1: Merge the LOG_STATUS table with ToolList based on Job Name
+    MergedTable = Table.NestedJoin(LOG_STATUS, {"Job Name"}, ToolList, {"Job Name"}, "ToolList", JoinKind.LeftOuter),
+    
+    // Step 2: Expand the ToolList columns (Tool ID and Tool Name) into LOG_STATUS
+    ExpandedTable = Table.ExpandTableColumn(MergedTable, "ToolList", {"Tool ID", "Tool Name"}, {"Tool ID", "Tool Name"}),
 
-    // Step 2: Lookup Tool Names for each ToolId
-    toolListFiltered = Table.SelectRows(ToolList, each Text.Trim([Job Name]) = Text.Trim(jobName)),
-    toolIdToNameList = List.Transform(toolListFiltered[Tool ID], each 
-        [ToolId = Text.Trim([Tool ID]), ToolName = Text.Trim([Tool Name])]
-    ),
+    // Step 3: Group by Job Name to handle multiple Tool IDs for the same Job Name
+    GroupedTable = Table.Group(ExpandedTable, {"Job Name", "Error"}, {
+        {"ToolDetails", each Text.Combine(List.Transform([Tool ID], 
+            each "Tool ID " & Text.From(_) & " (Tool Name: " & List.First([Tool Name]) & ")"), ", "), type text}
+    }),
 
-    // Step 3: Replace ToolIds with Tool Names in errorText
-    updatedError = List.Accumulate(
-                    toolIds, 
-                    errorText, 
-                    (state, current) => Text.Replace(state, "ToolId " & current, "ToolId " & current & " (" & 
-                    (List.First(List.Select(toolIdToNameList, each Text.Trim(Text.AfterDelimiter(_[ToolId], "ToolId ")) = current), null))[ToolName] & ")")
-                  )
+    // Step 4: Add a custom column to format Tool IDs, Tool Names, and Errors
+    AddCustomColumn = Table.AddColumn(GroupedTable, "CustomColumn", each 
+        [ToolDetails] & ": " & [Error])
+
 in
-    updatedError
+    AddCustomColumn
