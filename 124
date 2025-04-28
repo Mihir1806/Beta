@@ -1,25 +1,28 @@
-= try let
-    CurrentJobName = [Job Name],
-    ErrorLines = Splitter.SplitTextByDelimiter(#char(10))([Error]),
-    EnhancedErrorLines = List.Transform(ErrorLines, each
-        let
-            ToolIdPattern = "ToolId (\\d+)",
-            MatchingToolIdList = Text.Select(Text.Split(_, " "), {"0".."9"}),
-            FirstToolId = if List.Count(MatchingToolIdList) > 0 then MatchingToolIdList{0} else null,
-            ToolName = if FirstToolId <> null then
-                let
-                    MatchingTool = Table.First(Table.SelectRows(ToolList, each [Job Name] = CurrentJobName and [Tool ID] = FirstToolId))
-                in
-                    if MatchingTool <> null then MatchingTool[Tool Name] else null
-            else
-                null,
-            EnhancedLine = if FirstToolId <> null then
-                Text.Replace(_, "ToolId " & FirstToolId, "ToolId " & FirstToolId & (if ToolName <> null then " (" & ToolName & ")" else ""))
-            else
-                _
-        in
-            EnhancedLine
-    ),
-    CustomErrorMessage = Text.Combine(EnhancedErrorLines, #char(10))
-in
-    CustomErrorMessage otherwise [Error]
+= try
+    let
+        CurrentJobName = [Job Name],
+        ErrorLines = Splitter.SplitTextByDelimiter(LineFeed)([Error]),
+        EnhancedErrorLines = List.Transform(ErrorLines, each
+            let
+                ToolIdPattern = "ToolId (\\d+)",
+                MatchingToolIdList = Text.Select(Text.Split(_, " "), {"0".."9"}),
+                FirstToolId = if List.Count(MatchingToolIdList) > 0 then MatchingToolIdList{0} else null,
+                ToolName = if FirstToolId <> null then
+                    let
+                        MatchingTool = Table.First(Table.SelectRows(ToolList, each [Job Name] = CurrentJobName and [Tool ID] = FirstToolId))
+                    in
+                        if MatchingTool <> null then MatchingTool[Tool Name] else null
+                else
+                    null,
+                EnhancedLine = if FirstToolId <> null then
+                    Text.Replace(_, "ToolId " & FirstToolId, "ToolId " & FirstToolId & (if ToolName <> null then " (" & ToolName & ")" else ""))
+                else
+                    _
+            in
+                EnhancedLine
+        ),
+        CustomErrorMessage = Text.Combine(EnhancedErrorLines, LineFeed)
+    in
+        CustomErrorMessage
+otherwise
+    [Error]
