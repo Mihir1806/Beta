@@ -1,27 +1,33 @@
 let
-    // Assuming ToolList and LOG_STATUS are already loaded into Power Query
-
     // Step 1: Filter ToolList by Job Name to keep only relevant rows
     FilteredToolList = Table.SelectRows(ToolList, each List.Contains(LOG_STATUS[Job Name], [Job Name])),
 
-    // Step 2: Add Custom Column to LOG_STATUS to lookup ToolName based on ToolId and Job Name
+    // Step 2: Add Custom Column to LOG_STATUS to lookup ToolName based on ToolId and Job Name only when there is an error
     AddToolNameColumn = Table.AddColumn(LOG_STATUS, "ToolName", each 
-        let
-            // Filter ToolList to get rows matching the current Job Name and Tool ID
-            RelevantTools = Table.SelectRows(FilteredToolList, each [Job Name] = [Job Name] and [Tool ID] = [Tool ID]),
-            // Extract the Tool Name from the filtered table (if available)
-            ToolName = if Table.RowCount(RelevantTools) > 0 then RelevantTools{0}[Tool Name] else null
-        in
-            ToolName
+        if [Error] <> null then
+            let
+                // Filter ToolList to get rows matching the current Job Name and Tool ID
+                RelevantTools = Table.SelectRows(FilteredToolList, each [Job Name] = [Job Name] and [Tool ID] = [Tool ID]),
+                // Extract the Tool Name from the filtered table (if available)
+                ToolName = if Table.RowCount(RelevantTools) > 0 then RelevantTools{0}[Tool Name] else null
+            in
+                ToolName
+        else
+            null
     ),
 
-    // Step 3: Add Custom Column to format the error message
-    AddCustomColumn = Table.AddColumn(AddToolNameColumn, "FormattedError", each 
-        "Error ToolId " & Text.From([Tool ID]) & ": " & [Error] & (if [ToolName] <> null then " (Tool Name: " & [ToolName] & ")" else "")),
+    // Step 3: Add a Custom Column to format the error message as "Error ToolId <ToolId>: <Error>"
+    AddFormattedErrorColumn = Table.AddColumn(AddToolNameColumn, "FormattedError", each 
+        if [Error] <> null then
+            "Error ToolId " & Text.From([Tool ID]) & ": " & [Error] & 
+            (if [ToolName] <> null then " (Tool Name: " & [ToolName] & ")" else "")
+        else
+            null
+    ),
 
-    // Step 4: Group by Job Name and aggregate all errors for each Job Name
-    GroupedTable = Table.Group(AddCustomColumn, {"Job Name"}, {
-        {"AllErrors", each Text.Combine([FormattedError], "#(lf)"), type text}
+    // Step 4: Group by Job Name to aggregate all errors for each Job Name in a single cell, separated by a new line
+    GroupedTable = Table.Group(AddFormattedErrorColumn, {"Job Name"}, {
+        {"AllErrors", each Text.Combine(List.RemoveNulls([FormattedError]), "#(lf)"), type text}
     })
 
 in
