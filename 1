@@ -1,4 +1,26 @@
 let
+    // Reference the Job Name column
+    JobName = [Job Name],
+
+    // Split the Error1 column by semicolon to get individual ToolIds
+    extractedToolIds = Text.Split([Error1], ";"),
+
+    // Remove any extra spaces and trim ToolIds
+    trimmedToolIds = List.Transform(extractedToolIds, each Text.Trim(_)),
+
+    // Combine Job Name with each ToolId (e.g., "xyz-210")
+    combined = List.Transform(trimmedToolIds, each JobName & "-" & _),
+
+    // Join the combined values with "; "
+    result = Text.Combine(combined, "; ")
+in
+    result
+
+
+
+
+
+let
     parts = Text.Split([Error1], "ToolId "),
     extracted = List.Transform(
         List.Skip(parts, 1),
