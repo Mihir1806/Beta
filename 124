@@ -1,6 +1,6 @@
 = try let
     CurrentJobName = [Job Name],
-    ErrorLines = Splitter.SplitTextByDelimiter(Character.LineFeed)([Error]),
+    ErrorLines = Splitter.SplitTextByDelimiter(#char(10))([Error]),
     EnhancedErrorLines = List.Transform(ErrorLines, each
         let
             ToolIdPattern = "ToolId (\\d+)",
@@ -20,6 +20,6 @@
         in
             EnhancedLine
     ),
-    CustomErrorMessage = Text.Combine(EnhancedErrorLines, Character.LineFeed)
+    CustomErrorMessage = Text.Combine(EnhancedErrorLines, #char(10))
 in
     CustomErrorMessage otherwise [Error]
