@@ -14,3 +14,37 @@ in
 
 
 Text.Replace(Text.Replace([Error], "#(lf)", "; "), "#(cr)", "; ")
+
+
+
+
+let
+    // Step 1: Define your LOG_STATUS and ToolList tables (replace with your actual table names)
+    LOG_STATUS = ... ,  // Your LOG_STATUS table here
+    ToolList = ... ,  // Your ToolList table here
+
+    // Step 2: Extract ToolIds from the Error column
+    ExtractToolIds = Table.AddColumn(LOG_STATUS, "ExtractedToolIds", each 
+        Text.Split(Text.Select([Error], {"0".."9", " "}), " "), type list),
+
+    // Step 3: Replace ToolIds with the corresponding Custom values from ToolList
+    ReplaceToolIdsWithCustom = Table.AddColumn(ExtractToolIds, "UpdatedError", each 
+        Text.Combine(
+            List.Transform([ExtractedToolIds], (toolId) => 
+                let
+                    // Find the corresponding Custom value from ToolList for the ToolId
+                    customValue = try 
+                        List.First(Table.SelectRows(ToolList, each Text.From([Tool ID]) = toolId)[Custom]) 
+                        otherwise toolId
+                in
+                    customValue
+            ), " "
+        )
+    )
+in
+    ReplaceToolIdsWithCustom
+
+
+
+
+
