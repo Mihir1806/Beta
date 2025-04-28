@@ -1,5 +1,25 @@
 
 let
+    Source = YourSourceTable,
+    // Extract first ToolId
+    AddedFirstToolId = Table.AddColumn(Source, "FirstToolId", each 
+        let matches = Text.Matches([Error1], "ToolId\s*(\d+)")
+        in if List.Count(matches) > 0 then matches{0}[Value] else null),
+    // Extract all ToolIds as comma-separated string
+    AddedAllToolIds = Table.AddColumn(AddedFirstToolId, "AllToolIds", each 
+        Text.Combine(ExtractToolIds([Error1]), ", "))
+in
+    AddedAllToolIds
+
+
+
+
+
+
+
+
+
+let
     // Split the Error1 column by "ToolId"
     SplitText = Text.Split([Error1], "ToolId"),
     // Skip the first part of the split since it won't contain any numbers
