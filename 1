@@ -2,11 +2,21 @@ let
     jobName = [Job Name],
     errorText = [Error],
     toolTable = Table.SelectRows(ToolList, each [Job Name] = jobName),
-    numbersText = Text.RegexReplace(errorText, "[^\d]+", " "),
-    numbersList = Text.Split(Text.Trim(numbersText), " "),
-    matches = List.Transform(numbersList, each Text.From(_)),
+    errorLines = Text.Split(errorText, "#(lf)"),  // Split by line feed
+    toolIdList = List.Transform(
+        errorLines,
+        each 
+            let
+                findStart = Text.PositionOf(_, "ToolId "),
+                idText = if findStart <> -1 then 
+                            Text.Middle(_, findStart + 7, Text.PositionOfAny(Text.Middle(_, findStart + 7), {":", " "}) )
+                         else
+                            null
+            in idText
+    ),
+    toolIdListClean = List.RemoveNulls(toolIdList),
     enhancedError = List.Accumulate(
-        List.Distinct(matches),
+        List.Distinct(toolIdListClean),
         errorText,
         (state, toolId) =>
             let
