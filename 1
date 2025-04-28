@@ -1,35 +1,9 @@
-= try Text.Middle(Text.BetweenDelimiters([YourColumnName], "ToolId ", "("), 0, 10) otherwise null
-
-
 let
-    jobName = [Job Name],
-    errorText = [Error],
-    toolTable = Table.SelectRows(ToolList, each [Job Name] = jobName),
-    errorLines = Text.Split(errorText, "#(lf)"),  // Split by line feed
-    toolIdList = List.Transform(
-        errorLines,
-        each 
-            let
-                findStart = Text.PositionOf(_, "ToolId "),
-                idText = if findStart <> -1 then 
-                            Text.Middle(_, findStart + 7, Text.PositionOfAny(Text.Middle(_, findStart + 7), {":", " "}) )
-                         else
-                            null
-            in idText
-    ),
-    toolIdListClean = List.RemoveNulls(toolIdList),
-    enhancedError = List.Accumulate(
-        List.Distinct(toolIdListClean),
-        errorText,
-        (state, toolId) =>
-            let
-                toolRow = try Table.SelectRows(toolTable, each Text.From([Tool ID]) = toolId){0} otherwise null,
-                toolName = if toolRow <> null then toolRow[Tool Name] else null
-            in
-                if toolName <> null then
-                    Text.Replace(state, "ToolId " & toolId, "ToolId " & toolId & "(Tool Name : " & toolName & ")")
-                else
-                    state
-    )
+    // Load your table (replace with your actual table name)
+    Source = YourTableName,  // Replace YourTableName with your actual table name
+
+    // Transform the Error column to replace line breaks (LF and CR) with semicolons
+    CleanedErrorColumn = Table.TransformColumns(Source, {"Error", each Text.Replace(Text.Replace(_, "#(lf)", "; "), "#(cr)", "; "), type text})
+
 in
-    enhancedError
+    CleanedErrorColumn
