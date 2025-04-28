@@ -1,59 +1,47 @@
 let
-    Source = Log_Status,    // Your Log_Status table
+    // Assume you already have two tables loaded: ToolList and LOG_STATUS
+    Source = LOG_STATUS,
 
+    // Add a new column Error_Log
     Add_Error_Log = Table.AddColumn(Source, "Error_Log", each 
         let
-            errorText = [Error],
             jobName = [Job Name],
+            errorText = [Error],
 
-            // Step 1: Clean the Error text (replace line breaks, tabs, multiple spaces)
-            cleanedText = 
+            // Step 1: Clean error text (normalize line breaks, tabs etc)
+            normalizedError = 
                 if errorText <> null then
                     Text.Replace(Text.Replace(Text.Replace(Text.Replace(errorText, "#(cr,lf)", " "), "#(lf)", " "), "#(cr)", " "), "#(tab)", " ")
                 else
                     "",
 
-            cleanedText2 = Text.Combine(List.Select(Text.Split(cleanedText, " "), each _ <> ""), " "),  // remove extra spaces
+            // Step 2: Find all ToolId numbers manually
+            words = Text.SplitAny(normalizedError, " ,;:."),
+            toolIdParts = List.Select(words, each Text.StartsWith(Text.Trim(_), "ToolId")),
+            toolIdNumbers = List.Transform(toolIdParts, each try Number.FromText(Text.Trim(Text.AfterDelimiter(_, "ToolId"))) otherwise null),
+            validToolIds = List.Select(toolIdNumbers, each _ <> null),
 
-            // Step 2: Split into words
-            wordList = 
-                if cleanedText2 <> null then 
-                    Text.SplitAny(cleanedText2, " ,;:.") 
-                else 
-                    {},
+            // Step 3: Build replacements
+            replacements = List.Transform(validToolIds, each 
+                let
+                    id = _,
+                    toolMatch = Table.SelectRows(ToolList, each [Job Name] = jobName and [Tool ID] = id),
+                    toolName = if Table.RowCount(toolMatch) > 0 then toolMatch{0}[Tool Name] else null,
+                    originalText = "ToolId " & Text.From(id),
+                    replacementText = 
+                        if toolName <> null then 
+                            originalText & " (Tool Name- " & toolName & ")"
+                        else 
+                            originalText
+                in
+                    [Original = originalText, Replacement = replacementText]
+            ),
 
-            // Step 3: Find words starting with "ToolId"
-            toolIdWords = 
-                List.Select(wordList, each Text.StartsWith(Text.Trim(_), "ToolId")),
-
-            // Step 4: Process each ToolId
-            transformToolIds = 
-                List.Transform(toolIdWords, each 
-                    let
-                        toolIdFull = Text.Trim(_),               // like "ToolId 2501"
-                        toolIdNumber = try Number.FromText(Text.Trim(Text.AfterDelimiter(toolIdFull, "ToolId"))) otherwise null,  // only 2501
-                        filteredTool = 
-                            if toolIdNumber <> null then 
-                                Table.SelectRows(ToolList, each [Job Name] = jobName and [Tool ID] = toolIdNumber) 
-                            else 
-                                null,
-                        toolNameFound = 
-                            if filteredTool <> null and Table.RowCount(filteredTool) > 0 
-                            then filteredTool{0}[Tool Name] 
-                            else null,
-                        replacementText = 
-                            if toolNameFound <> null 
-                            then toolIdFull & " (Tool Name- " & toolNameFound & ")" 
-                            else toolIdFull
-                    in
-                        [Original = toolIdFull, Replacement = replacementText]
-                ),
-
-            // Step 5: Replace ToolIds with ToolId + ToolName in original error text (preserving formatting)
-            updatedError = 
-                List.Accumulate(transformToolIds, errorText, (state, current) => Text.Replace(state, current[Original], current[Replacement]))
+            // Step 4: Apply replacements to original Error text (preserve new lines)
+            finalError = 
+                List.Accumulate(replacements, errorText, (state, current) => Text.Replace(state, current[Original], current[Replacement]))
         in
-            updatedError
+            finalError
     )
 in
     Add_Error_Log
