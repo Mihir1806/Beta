@@ -5,3 +5,22 @@ Problem Statement:
 Objective of This Dashboard:
 	•	Eliminate manual lookup by building a system where tool metadata (Tool ID → Tool Name/Type) is already available.
 	•	Automate the mapping of errors to tools, making it easier to analyze what kind of tools are failing and why.
+
+
+Purpose:
+This Excel file serves as a reference table containing metadata for all workflows.
+
+Generated From:
+Alteryx workflow that scans the workflow repository.
+
+Process Overview:
+	1.	Alteryx Workflow Execution:
+	•	Reads all workflow files from a defined workflow directory path.
+	2.	Metadata Extraction:
+	•	For each workflow:
+	•	Extracts Workflow Name
+	•	Extracts Tool ID
+	•	Extracts Tool Name
+	3.	Excel Output Generation:
+	•	Consolidates the extracted metadata into a structured Excel file.
+
