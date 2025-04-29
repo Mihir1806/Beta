@@ -1,3 +1,22 @@
+let
+    StatusList = Text.Split([LOG_STATUS], ";"),
+    MappedList = List.Transform(StatusList, each 
+        try Record.Field(
+            Table.SelectRows(ToolList, (r) => Text.Lower(r[JT]) = Text.Lower(_)){0}, "id-Name"
+        ) otherwise "Not Found"
+    ),
+    Output = Text.Combine(MappedList, ";")
+in
+    Output
+
+
+
+
+
+
+
+
+
 
 let
     // Reference the main table and ToolList table
