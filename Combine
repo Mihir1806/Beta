@@ -1,36 +1,5 @@
-Enhanced Error = 
-VAR JobName = 'LOG_STATUS'[Job Name]
-VAR ErrorText = 'LOG_STATUS'[Error]
-
--- Extract Tool IDs manually (not easy in DAX, so assume error lines are simple)
-VAR ToolId1 = 
-    IF(
-        SEARCH("ToolId ", ErrorText, 1, 0) > 0,
-        MID(
-            ErrorText,
-            SEARCH("ToolId ", ErrorText, 1, 0) + 7,
-            FIND(":", ErrorText, SEARCH("ToolId ", ErrorText, 1, 0)) - (SEARCH("ToolId ", ErrorText, 1, 0) + 7)
-        ),
-        BLANK()
-    )
-
-VAR ToolName1 = 
-    LOOKUPVALUE(
-        'ToolList'[Tool Name],
-        'ToolList'[Job Name], JobName,
-        'ToolList'[Tool ID], VALUE(ToolId1)
-    )
-
-VAR ReplacedError = 
-    IF(
-        NOT ISBLANK(ToolName1),
-        SUBSTITUTE(
-            ErrorText,
-            "ToolId " & ToolId1,
-            "ToolId " & ToolId1 & "(Tool Name : " & ToolName1 & ")"
-        ),
-        ErrorText
-    )
-
-RETURN
-    ReplacedError
+IF StartsWith([YourColumn], "ABC") THEN 
+    RIGHT([YourColumn], Length([YourColumn]) - 3) 
+ELSE 
+    [YourColumn] 
+ENDIF
