@@ -28,3 +28,34 @@ Usage in Dashboard:
 This Excel acts as a lookup table to enrich errors with tool and workflow context during the data merge phase.
 
 
+
+
+
+
+
+1.	Input Sources
+	•	Outlook Mail: Status emails (job success/failure)
+	•	Excel File: Job Metadata (Job Name, Tool ID, Tool Name)
+	•	Flexel Log File (Drive): Execution logs with detailed info
+	2.	Data Extraction & Preprocessing
+	•	Read emails and extract job status info
+	•	Read Excel for tool-job mappings
+	•	Read log files and extract error messages
+	3.	Error Identification & Enrichment
+	•	Identify jobs with errors from logs
+	•	Match with status emails to verify failed jobs
+	•	Lookup Tool Name from Excel using Job ID or Tool ID
+	4.	Data Merge & Transformation
+	•	Merge error logs, email data, and Excel metadata
+	•	Clean and structure the dataset for analysis
+	5.	Power BI Dashboard
+	•	Visualize error trends, tool-wise failures, job performance
+	•	Highlight critical issues, job-wise and tool-wise
+	•	Enable filters for Tool, Date, Job Status, etc.
+
+
+
+
+
+
+
