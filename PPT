@@ -1,0 +1,7 @@
+Problem Statement:
+	•	Errors captured in logs often only mention the Tool ID, not the Tool Type (e.g., Formula, Filter, Select, etc.).
+	•	To understand the root cause, we are forced to manually open the Alteryx workflow to check what tool the ID belongs to.
+
+Objective of This Dashboard:
+	•	Eliminate manual lookup by building a system where tool metadata (Tool ID → Tool Name/Type) is already available.
+	•	Automate the mapping of errors to tools, making it easier to analyze what kind of tools are failing and why.
