@@ -24,3 +24,7 @@ Process Overview:
 	3.	Excel Output Generation:
 	•	Consolidates the extracted metadata into a structured Excel file.
 
+Usage in Dashboard:
+This Excel acts as a lookup table to enrich errors with tool and workflow context during the data merge phase.
+
+
