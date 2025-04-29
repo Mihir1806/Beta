@@ -30,3 +30,10 @@ ENDIF;
 IF EndsWith([YourColumn], ".yxmd") THEN 
     [YourColumn] = LEFT([YourColumn], Length([YourColumn]) - 5)
 ENDIF;
+
+
+IF Right([Job Name], 5) = ".yxmd" THEN
+    Left([Job Name], Length([Job Name]) - 5)
+ELSE
+    [Job Name]
+ENDIF
