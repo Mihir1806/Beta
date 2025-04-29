@@ -19,3 +19,14 @@ ELSE
         [YourColumn]
     )
 ENDIF
+
+
+// Remove first 31 characters
+IF Length([YourColumn]) > 31 THEN 
+    [YourColumn] = RIGHT([YourColumn], Length([YourColumn]) - 31)
+ENDIF;
+
+// Remove .yxmd from end if present
+IF EndsWith([YourColumn], ".yxmd") THEN 
+    [YourColumn] = LEFT([YourColumn], Length([YourColumn]) - 5)
+ENDIF;
