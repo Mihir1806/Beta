@@ -1,4 +1,33 @@
 let
+    Output = if Text.Trim([Error3]) = "" then
+        ""
+    else
+        let
+            StatusList = List.Transform(Text.Split([Error3], ";"), each Text.Trim(_)),
+            MappedList = List.Transform(
+                StatusList, 
+                each try 
+                    Record.Field(
+                        Table.SelectRows(ToolList, (r) => Text.Lower(r[JT]) = Text.Lower(_)){0}, 
+                        "ID-Name"
+                    ) 
+                otherwise 
+                    "Not Found"
+            )
+        in
+            Text.Combine(MappedList, ";")
+in
+    Output
+
+
+
+
+
+
+
+
+
+let
     StatusList = Text.Split([LOG_STATUS], ";"),
     MappedList = List.Transform(StatusList, each 
         try Record.Field(
