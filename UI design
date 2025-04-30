@@ -1,7 +1,38 @@
-Design a modern dark dashboard UI with a left sidebar in a deep navy gradient from #121832 to #1b223d. The main content area should feature panels in #192138 transitioning to #222b48. Use clean sans-serif fonts, light blue accents for buttons and highlights, soft card shadows, and a flat, minimalist aesthetic.”
+from openpyxl import load_workbook
 
-⸻
+# Load workbook and active sheet
+wb = load_workbook("your_file.xlsx")
+ws = wb.active
 
-Prompt for Image 2 (Suubo Dashboard Style)
+# Add a "Match Status" column
+result_col = ws.max_column + 1
+ws.cell(row=1, column=result_col).value = "Match Status"
 
-“Create a sleek dark-themed analytics dashboard with a sidebar in a dark gradient from #1E2336 to #2a2f49. The main container area should use a cooler blue gradient from #314069 to #3e4f84. Include neon green progress bars, purple rating icons, thin outlines on buttons, and a professional, high-tech visual style.”
+match_count = 0
+
+# Process each row starting from row 2
+for row in ws.iter_rows(min_row=2):
+    cell_a = row[0]  # Column A
+    cell_b = row[1]  # Column B
+    row_num = cell_a.row
+
+    # Check values
+    a_empty = cell_a.value is None or str(cell_a.value).strip() == ""
+    b_empty = cell_b.value is None or str(cell_b.value).strip() == ""
+
+    # Check if fill color is white (or default/no fill)
+    a_fill = cell_a.fill.fgColor.rgb if cell_a.fill and cell_a.fill.fill_type == 'solid' else None
+    b_fill = cell_b.fill.fgColor.rgb if cell_b.fill and cell_b.fill.fill_type == 'solid' else None
+
+    a_white = a_fill in (None, 'FFFFFFFF')
+    b_white = b_fill in (None, 'FFFFFFFF')
+
+    if (a_empty and a_white) or (b_empty and b_white):
+        ws.cell(row=row_num, column=result_col).value = "Match"
+        match_count += 1
+    else:
+        ws.cell(row=row_num, column=result_col).value = "No Match"
+
+# Save back to the same file
+wb.save("your_file.xlsx")
+print(f"Marked {match_count} matching rows in 'Match Status' column.")
