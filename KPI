@@ -1,62 +1,8 @@
-import requests
-import json
 
-def get_jira_data(api_key, filter_id):
-    url = f'https://echonet.bnpparibas/rest/api/2/filter/{filter_id}/results'
-    headers = {
-        'Authorization': f'Bearer {api_key}',
-        'Content-Type': 'application/json'
-    }
-    
-    try:
-        response = requests.get(url, headers=headers)
-        print(f"Response Code: {response.status_code}")  # Debugging line
-        print(f"Response Body: {response.text}")  # Debugging line
-        
-        if response.status_code == 200:
-            return response.json()
-        else:
-            print(f"Failed to fetch data: {response.status_code} - {response.reason}")
-            return None
-    except requests.exceptions.RequestException as e:
-        print(f"Error occurred: {e}")
-        return None
+I am experiencing significant performance issues on my HVD. The RAM usage remains consistently high—around 11.5 GB out of 12 GB—which causes the system to run extremely slowly and impacts overall productivity.
 
-def calculate_kpis(data):
-    total_issues = data['total']
-    return {
-        'total_issues': total_issues,
-    }
+The IT team has already attempted to delete cache files, but there has been no improvement in memory usage.
 
-def main():
-    api_key = 'your_api_key_here'
-    filter_id = 'YOUR_FILTER_ID'
-    
-    data = get_jira_data(api_key, filter_id)
-    
-    if data:
-        kpis = calculate_kpis(data)
-        print("KPIs:", kpis)
+Additionally, I’m facing issues while working with Alteryx. Even after saving a workflow, the changes often do not get saved correctly. When I reopen the file, it either shows an older autosaved version or appears to be deleted, making it difficult to work reliably.
 
-if __name__ == "__main__":
-    main()
-
-
-Error occurred: [WinError 10060] A connection attempt failed because the connected party did not properly respond after a period of time, or established connection failed because connected host has failed to respond
-I
-[Done] exited
-
-
-Create a ai bot in python llm without using api key to analyse the data and give solutions in phase
-Phase 1: to combine excel and create master data 
-Phase 2: explain column and skeleton of mater data to bot 
-Phase 3: compare the transaction data and master data and state what is wrong in transaction and how it can be corrected 
-Phase 4: to retrain the bot with training and testing of new cases 
-
-
-
-
-
-SSL error occurred: HTTPSConnectionPool (host='jira cib.echonet', port=443): Max retries exceeded with url: /rest/api/3/ filter/43358/results (Caused by SSLError(SSLError(1, '[SSL: SSLV3_ALERT_HANDSHAKE_FAILURE] ssIv3 alert handshake failure(_ssl.c:997)')))
-[Donel exited with
-
+Requesting your support in resolving these issues at the earliest.
