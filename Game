@@ -1,3 +1,18 @@
+Build a fully Python-based 2D cooperative multiplayer puzzle platformer game inspired by It Takes Two, where two players — Vikalp and Bhavya — play together from different machines. The game includes:
+	•	25 levels with increasing complexity (each lasting 10–12 minutes)
+	•	Distinct cooperative puzzles (e.g., button/door, box-pushing, teleporting, platform jumping)
+	•	Unique abilities for each player (e.g., double-jump for Vikalp, teleportation for Bhavya)
+	•	Dynamic level transitions and themed environments
+	•	Save/load game support using local storage
+	•	Real-time multiplayer using Flask + Flask-SocketIO
+	•	Web interface with HTML fully embedded inside the Python script (no external files)
+	•	A Flask-based room system for up to 12 simultaneous 2-player game sessions, with name editing
+	•	Smooth movement, basic physics, and 60 FPS target
+	•	All frontend HTML and JavaScript rendered from within Python using render_template_string
+
+The entire game — including graphics, multiplayer sync, game logic, puzzles, UI, and networking — should run from a single Python script, using only Python and web technologies embedded in it.
+
+
 import pygame
 import random
 import json
