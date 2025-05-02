@@ -28,3 +28,23 @@ let
     Expanded = Table.ExpandRecordColumn(ToTable, "Row", {"Date", "ExcelURL"})
 in
     Expanded
+
+
+let
+    Source = Text.FromBinary(Web.Contents("https://fedai.org.in/RevaluationRates.aspx?Cid=1&SCid=0")),
+    Rows = List.Skip(Text.Split(Source, "<tr"), 1),
+    
+    Parsed = List.Transform(Rows, each
+        let
+            row = Text.BeforeDelimiter(_, "</tr>"),
+            dateTime = try Text.BetweenDelimiters(row, "<td>", "</td>") otherwise null,
+            label = try Text.BetweenDelimiters(row, ">", "</a>") otherwise null,
+            href = try Text.BetweenDelimiters(row, "href=""", """") otherwise null,
+            fullLink = if href <> null then "https://fedai.org.in" & href else null
+        in
+            [#"Date & Time" = dateTime, Label = label, Hyperlink = fullLink]
+    ),
+    
+    Output = Table.FromRecords(Parsed)
+in
+    Output
