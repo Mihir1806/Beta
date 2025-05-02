@@ -29,23 +29,24 @@ in
 let
     Source = Web.Page(Web.Contents("https://fedai.org.in/RevaluationRates.aspx")),
     Data = Source{0}[Data],
-    
+
     // Rename columns
     Renamed = Table.RenameColumns(Data, {{"Column1", "Date & Time"}, {"Column2", "Revaluation Rates"}}),
-    
-    // Extract both text and hyperlink from anchor tag
-    ExtractedLinks = Table.TransformColumns(Renamed, {
-        "Revaluation Rates", each Html.Table(_, {{"Text", "a", each Text.From(_)}, {"Link", "a", each try Html.Attribute(_, "href") otherwise null}})
-    }),
 
-    // Expand the inner table to extract both values
-    Expanded = Table.ExpandTableColumn(ExtractedLinks, "Revaluation Rates", {"Text", "Link"}),
-    
-    // Clean full URL
-    FullLink = Table.TransformColumns(Expanded, {"Link", each if Text.StartsWith(_, "/") then "https://fedai.org.in" & _ else _}),
-    
-    // Rename columns for clarity
-    Final = Table.RenameColumns(FullLink, {{"Text", "Rate Label"}, {"Link", "Excel URL"}})
+    // Extract hyperlink and text using row selector {0}
+    WithLinkInfo = Table.AddColumn(Renamed, "LinkDetails", each try Html.Table([Revaluation Rates], {
+        {"Text", "a", each Text.From(_)}, 
+        {"Link", "a", each Html.Attribute(_, "href")}
+    }){0} otherwise null),
+
+    // Expand the extracted record into two columns
+    Expanded = Table.ExpandRecordColumn(WithLinkInfo, "LinkDetails", {"Text", "Link"}),
+
+    // Fix relative URL if needed
+    FixedLinks = Table.TransformColumns(Expanded, {"Link", each if Text.StartsWith(_, "/") then "https://fedai.org.in" & _ else _}),
+
+    // Final column renaming
+    Final = Table.RenameColumns(FixedLinks, {{"Text", "Rate Label"}, {"Link", "Excel URL"}})
 in
     Final
 
