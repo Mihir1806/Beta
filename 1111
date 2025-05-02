@@ -15,3 +15,30 @@ let
     })
 in
     FullURLs
+
+
+let
+    Source = Web.Page(Web.Contents("https://fedai.org.in/RevaluationRates.aspx?Cid=1&SCid=0")),
+    Data = Source{0}[Data],
+
+    // Rename columns for clarity
+    Renamed = Table.RenameColumns(Data, {{"Column1", "Date & Time"}, {"Column2", "Revaluation Rates"}}),
+
+    // Extract hyperlink using Html.Table on raw HTML column
+    ExtractedLinks = Table.AddColumn(Renamed, "LinkDetails", each try Html.Table([Revaluation Rates], {
+        {"Text", "a", each Text.From(_)},
+        {"Link", "a", each Html.Attribute(_, "href")}
+    }){0} otherwise null),
+
+    // Expand the hyperlink fields
+    Expanded = Table.ExpandRecordColumn(ExtractedLinks, "LinkDetails", {"Text", "Link"}),
+
+    // Convert relative URL to full FEDAI URL
+    FullLink = Table.TransformColumns(Expanded, {
+        "Link", each if _ <> null and Text.StartsWith(_, "/") then "https://fedai.org.in" & _ else _
+    }),
+
+    // Rename for clarity
+    Final = Table.RenameColumns(FullLink, {{"Text", "Label"}, {"Link", "Excel URL"}})
+in
+    Final
