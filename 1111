@@ -1,50 +1,50 @@
-let
-    // Get the full raw HTML page
-    RawHTML = Text.FromBinary(Web.Contents("https://fedai.org.in/RevaluationRates.aspx?Cid=1&SCid=0")),
+import requests
+from bs4 import BeautifulSoup
+import pandas as pd
+import os
 
-    // Split by <tr> tags to get each table row
-    Rows = List.Skip(Text.Split(RawHTML, "<tr"), 1),
+# URL of the FEDAI Revaluation Rates page
+url = "https://fedai.org.in/RevaluationRates.aspx?Cid=1&SCid=0"
+base_url = "https://fedai.org.in"
 
-    // Extract date and href from each row
-    Extracted = List.Transform(Rows, each [
-        RowText = Text.BeforeDelimiter(_, "</tr>"),
+# Fetch the page content
+response = requests.get(url)
+soup = BeautifulSoup(response.text, "html.parser")
 
-        // Extract date column (first <td>)
-        DateRaw = try Text.BetweenDelimiters(RowText, "<td>", "</td>") otherwise null,
+# Find the table rows containing revaluation data
+table_rows = soup.find_all("tr")[1:]  # Skip header row
 
-        // Extract href (second column with <a href>)
-        LinkRaw = try Text.BetweenDelimiters(RowText, "href=""", """") otherwise null,
+# Parse the rows
+data = []
+for row in table_rows:
+    cells = row.find_all("td")
+    if len(cells) >= 2:
+        date_time = cells[0].text.strip()
+        link_tag = cells[1].find("a")
+        label = link_tag.text.strip() if link_tag else cells[1].text.strip()
+        href = link_tag['href'] if link_tag and link_tag.has_attr('href') else None
+        full_url = base_url + href if href else None
+        data.append({
+            "Date & Time": date_time,
+            "Label": label,
+            "Excel URL": full_url
+        })
 
-        // Convert relative to full URL
-        FullURL = if LinkRaw <> null and Text.StartsWith(LinkRaw, "/") then "https://fedai.org.in" & LinkRaw else LinkRaw,
+# Convert to DataFrame
+df = pd.DataFrame(data)
 
-        Output = [Date = DateRaw, ExcelURL = FullURL]
-    ][Output]),
+# Show the scraped table
+print(df)
 
-    // Convert to table
-    ToTable = Table.FromList(Extracted, Record.ToTable, {"Row"}),
+# Optional: Download Excel files to a folder
+download_folder = "fedai_excels"
+os.makedirs(download_folder, exist_ok=True)
 
-    // Expand the inner records
-    Expanded = Table.ExpandRecordColumn(ToTable, "Row", {"Date", "ExcelURL"})
-in
-    Expanded
-
-
-let
-    Source = Text.FromBinary(Web.Contents("https://fedai.org.in/RevaluationRates.aspx?Cid=1&SCid=0")),
-    Rows = List.Skip(Text.Split(Source, "<tr"), 1),
-    
-    Parsed = List.Transform(Rows, each
-        let
-            row = Text.BeforeDelimiter(_, "</tr>"),
-            dateTime = try Text.BetweenDelimiters(row, "<td>", "</td>") otherwise null,
-            label = try Text.BetweenDelimiters(row, ">", "</a>") otherwise null,
-            href = try Text.BetweenDelimiters(row, "href=""", """") otherwise null,
-            fullLink = if href <> null then "https://fedai.org.in" & href else null
-        in
-            [#"Date & Time" = dateTime, Label = label, Hyperlink = fullLink]
-    ),
-    
-    Output = Table.FromRecords(Parsed)
-in
-    Output
+for index, row in df.iterrows():
+    if row["Excel URL"]:
+        file_name = f"{row['Label'].replace(' ', '_').replace('/', '-')}.xlsx"
+        file_path = os.path.join(download_folder, file_name)
+        file_response = requests.get(row["Excel URL"])
+        with open(file_path, "wb") as f:
+            f.write(file_response.content)
+        print(f"Downloaded: {file_name}")
