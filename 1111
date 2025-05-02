@@ -7,3 +7,19 @@ let
     Expanded = Table.ExpandRecordColumn(ExtractedTable, "Revaluation Rates", {"Text", "Link"})
 in
     Expanded
+
+
+let
+    Source = Web.Page(Web.Contents("https://fedai.org.in/RevaluationRates.aspx?Cid=1&SCid=0")),
+    Data = Source{0}[Data],
+    
+    // Rename columns
+    RenamedColumns = Table.RenameColumns(Data, {{"Column1", "Date & Time"}, {"Column2", "Revaluation Rates"}}),
+    
+    // Extract hyperlinks from the "Revaluation Rates" column
+    WithLinks = Table.AddColumn(RenamedColumns, "Excel URL", each try Html.Table([Revaluation Rates], {{"Link", "a", each Html.Attribute(_, "href")}}){0}[Link] otherwise null),
+    
+    // Clean relative links
+    FullLinks = Table.TransformColumns(WithLinks, {"Excel URL", each if Text.StartsWith(_, "/") then "https://fedai.org.in" & _ else _})
+in
+    FullLinks
