@@ -1,52 +1,17 @@
 let
-    Source = Web.Page(Web.Contents("https://fedai.org.in/RevaluationRates.aspx")),
-    Data = Source{0}[Data],
-    ExtractedTable = Table.TransformColumns(Data, {
-        {"Revaluation Rates", each Html.Table(_, {{"Text", "a", each Text.From(_)}, {"Link", "a", each try Html.Attribute(_, "href") otherwise null}})}
-    }),
-    Expanded = Table.ExpandRecordColumn(ExtractedTable, "Revaluation Rates", {"Text", "Link"})
-in
-    Expanded
-
-
-let
+    // Load the webpage
     Source = Web.Page(Web.Contents("https://fedai.org.in/RevaluationRates.aspx?Cid=1&SCid=0")),
     Data = Source{0}[Data],
-    
-    // Rename columns
-    RenamedColumns = Table.RenameColumns(Data, {{"Column1", "Date & Time"}, {"Column2", "Revaluation Rates"}}),
-    
-    // Extract hyperlinks from the "Revaluation Rates" column
-    WithLinks = Table.AddColumn(RenamedColumns, "Excel URL", each try Html.Table([Revaluation Rates], {{"Link", "a", each Html.Attribute(_, "href")}}){0}[Link] otherwise null),
-    
-    // Clean relative links
-    FullLinks = Table.TransformColumns(WithLinks, {"Excel URL", each if Text.StartsWith(_, "/") then "https://fedai.org.in" & _ else _})
-in
-    FullLinks
 
-
-
-let
-    Source = Web.Page(Web.Contents("https://fedai.org.in/RevaluationRates.aspx")),
-    Data = Source{0}[Data],
-
-    // Rename columns
+    // Rename columns for clarity
     Renamed = Table.RenameColumns(Data, {{"Column1", "Date & Time"}, {"Column2", "Revaluation Rates"}}),
 
-    // Extract hyperlink and text using row selector {0}
-    WithLinkInfo = Table.AddColumn(Renamed, "LinkDetails", each try Html.Table([Revaluation Rates], {
-        {"Text", "a", each Text.From(_)}, 
-        {"Link", "a", each Html.Attribute(_, "href")}
-    }){0} otherwise null),
+    // Extract actual hyperlink from anchor tag in "Revaluation Rates"
+    AddLinkColumn = Table.AddColumn(Renamed, "Excel URL", each try Text.BetweenDelimiters([Revaluation Rates], "href=""", """") otherwise null),
 
-    // Expand the extracted record into two columns
-    Expanded = Table.ExpandRecordColumn(WithLinkInfo, "LinkDetails", {"Text", "Link"}),
-
-    // Fix relative URL if needed
-    FixedLinks = Table.TransformColumns(Expanded, {"Link", each if Text.StartsWith(_, "/") then "https://fedai.org.in" & _ else _}),
-
-    // Final column renaming
-    Final = Table.RenameColumns(FixedLinks, {{"Text", "Rate Label"}, {"Link", "Excel URL"}})
+    // Fix relative URLs to full FEDAI links
+    FullURLs = Table.TransformColumns(AddLinkColumn, {
+        "Excel URL", each if _ <> null and Text.StartsWith(_, "/") then "https://fedai.org.in" & _ else _
+    })
 in
-    Final
-
+    FullURLs
