@@ -1,44 +1,30 @@
 let
-    // Load the webpage
-    Source = Web.Page(Web.Contents("https://fedai.org.in/RevaluationRates.aspx?Cid=1&SCid=0")),
-    Data = Source{0}[Data],
+    // Get the full raw HTML page
+    RawHTML = Text.FromBinary(Web.Contents("https://fedai.org.in/RevaluationRates.aspx?Cid=1&SCid=0")),
 
-    // Rename columns for clarity
-    Renamed = Table.RenameColumns(Data, {{"Column1", "Date & Time"}, {"Column2", "Revaluation Rates"}}),
+    // Split by <tr> tags to get each table row
+    Rows = List.Skip(Text.Split(RawHTML, "<tr"), 1),
 
-    // Extract actual hyperlink from anchor tag in "Revaluation Rates"
-    AddLinkColumn = Table.AddColumn(Renamed, "Excel URL", each try Text.BetweenDelimiters([Revaluation Rates], "href=""", """") otherwise null),
+    // Extract date and href from each row
+    Extracted = List.Transform(Rows, each [
+        RowText = Text.BeforeDelimiter(_, "</tr>"),
 
-    // Fix relative URLs to full FEDAI links
-    FullURLs = Table.TransformColumns(AddLinkColumn, {
-        "Excel URL", each if _ <> null and Text.StartsWith(_, "/") then "https://fedai.org.in" & _ else _
-    })
+        // Extract date column (first <td>)
+        DateRaw = try Text.BetweenDelimiters(RowText, "<td>", "</td>") otherwise null,
+
+        // Extract href (second column with <a href>)
+        LinkRaw = try Text.BetweenDelimiters(RowText, "href=""", """") otherwise null,
+
+        // Convert relative to full URL
+        FullURL = if LinkRaw <> null and Text.StartsWith(LinkRaw, "/") then "https://fedai.org.in" & LinkRaw else LinkRaw,
+
+        Output = [Date = DateRaw, ExcelURL = FullURL]
+    ][Output]),
+
+    // Convert to table
+    ToTable = Table.FromList(Extracted, Record.ToTable, {"Row"}),
+
+    // Expand the inner records
+    Expanded = Table.ExpandRecordColumn(ToTable, "Row", {"Date", "ExcelURL"})
 in
-    FullURLs
-
-
-let
-    Source = Web.Page(Web.Contents("https://fedai.org.in/RevaluationRates.aspx?Cid=1&SCid=0")),
-    Data = Source{0}[Data],
-
-    // Rename columns for clarity
-    Renamed = Table.RenameColumns(Data, {{"Column1", "Date & Time"}, {"Column2", "Revaluation Rates"}}),
-
-    // Extract hyperlink using Html.Table on raw HTML column
-    ExtractedLinks = Table.AddColumn(Renamed, "LinkDetails", each try Html.Table([Revaluation Rates], {
-        {"Text", "a", each Text.From(_)},
-        {"Link", "a", each Html.Attribute(_, "href")}
-    }){0} otherwise null),
-
-    // Expand the hyperlink fields
-    Expanded = Table.ExpandRecordColumn(ExtractedLinks, "LinkDetails", {"Text", "Link"}),
-
-    // Convert relative URL to full FEDAI URL
-    FullLink = Table.TransformColumns(Expanded, {
-        "Link", each if _ <> null and Text.StartsWith(_, "/") then "https://fedai.org.in" & _ else _
-    }),
-
-    // Rename for clarity
-    Final = Table.RenameColumns(FullLink, {{"Text", "Label"}, {"Link", "Excel URL"}})
-in
-    Final
+    Expanded
