@@ -1,0 +1,9 @@
+let
+    Source = Web.Page(Web.Contents("https://fedai.org.in/RevaluationRates.aspx")),
+    Data = Source{0}[Data],
+    ExtractedTable = Table.TransformColumns(Data, {
+        {"Revaluation Rates", each Html.Table(_, {{"Text", "a", each Text.From(_)}, {"Link", "a", each try Html.Attribute(_, "href") otherwise null}})}
+    }),
+    Expanded = Table.ExpandRecordColumn(ExtractedTable, "Revaluation Rates", {"Text", "Link"})
+in
+    Expanded
