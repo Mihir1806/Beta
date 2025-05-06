@@ -1,6 +1,10 @@
 =MAX(0, MIN(G2, DATE(YEAR(D2), 2, 1) - 1) - MAX(D2, DATE(YEAR(D2), 1, 1)) + 1)
 
 
+
+=MAX(0, MIN(G2, DATE(YEAR(D2), 2, 1) - 1) - MAX(D2, DATE(YEAR(D2), 1, 1)) + 1)
+
+
 =IF((G2 - D2) > L2, IF(DATEDIF(D2, G2, "m")=0, G2 - D2, (G2 - D2) / DATEDIF(D2, G2, "m")), "")
 
 
