@@ -1,3 +1,11 @@
+=AVERAGEIFS(
+  Data!M2:M100,
+  Data!D2:D100,"<=31-Jan-2024",
+  Data!G2:G100,">=01-Jan-2024"
+)
+
+
+
 =IFERROR(
   SUMPRODUCT(
     --(Data!D2:D100<=DATE(2024,1,31)),
