@@ -1,3 +1,6 @@
+=IF((Y1 - X1) > AA1, IF(DATEDIF(X1, Y1, "m")=0, Y1 - X1, (Y1 - X1) / DATEDIF(X1, Y1, "m")), "")
+
+
 let
     Output = if Text.Trim([Error3]) = "" then
         ""
