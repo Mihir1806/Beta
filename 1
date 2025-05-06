@@ -1,3 +1,18 @@
+=IFERROR(
+  SUMPRODUCT(
+    --(Data!D2:D100<=DATE(2024,1,31)),
+    --(IF(Data!G2:G100="", TODAY(), Data!G2:G100)>=DATE(2024,1,1)),
+    MIN(IF(Data!G2:G100="", TODAY(), Data!G2:G100), DATE(2024,2,1)-1) - MAX(Data!D2:D100, DATE(2024,1,1)) + 1
+  ) /
+  SUMPRODUCT(
+    --(Data!D2:D100<=DATE(2024,1,31)),
+    --(IF(Data!G2:G100="", TODAY(), Data!G2:G100)>=DATE(2024,1,1))
+  ),
+  0
+)
+
+
+
 =MAX(0, MIN(G2, DATE(YEAR(D2), 2, 1) - 1) - MAX(D2, DATE(YEAR(D2), 1, 1)) + 1)
 
 
