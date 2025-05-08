@@ -1,3 +1,54 @@
+
+let
+    // Step 1: Base tables
+    Source = LOG_STATUS,
+    ToolList = ToolList,  // Already loaded table
+
+    // Step 2: Parse each error block (split by ;) and extract ToolId + message
+    AddParsed = Table.AddColumn(Source, "ErrorParsed", each 
+        let
+            errorText = Text.Replace([Error], "#(cr)#(lf)", " "),  // Normalize line breaks
+            splitErrors = Text.Split(errorText, ";"),
+            cleanedList = List.Transform(splitErrors, each Text.Trim(_)),
+            parsedList = List.Transform(cleanedList, each 
+                let
+                    match = Text.RegexMatch(_, "ToolId (\d+): (.+)"),
+                    toolId = try Number.From(match{0}{1}) otherwise null,
+                    message = try match{0}{2} otherwise null
+                in
+                    [ToolId=toolId, Message=message]
+            )
+        in
+            List.RemoveNulls(parsedList)
+    ),
+
+    // Step 3: Expand rows and match tool names
+    Expanded = Table.ExpandListColumn(AddParsed, "ErrorParsed"),
+    ExpandedCols = Table.ExpandRecordColumn(Expanded, "ErrorParsed", {"ToolId", "Message"}),
+
+    // Step 4: Merge with ToolList
+    Joined = Table.NestedJoin(ExpandedCols, {"Job Name", "ToolId"}, ToolList, {"Job Name", "Tool ID"}, "ToolInfo", JoinKind.LeftOuter),
+    ExpandedTools = Table.ExpandTableColumn(Joined, "ToolInfo", {"Tool Name"}),
+
+    // Step 5: Format result string
+    AddFormatted = Table.AddColumn(ExpandedTools, "FormattedLine", each 
+        "Error ToolId " & Text.From([ToolId]) & 
+        (if [Tool Name] <> null then " (Tool Name: " & [Tool Name] & ")" else "") & 
+        ": " & [Message]
+    ),
+
+    // Step 6: Group back and join into original table
+    Grouped = Table.Group(AddFormatted, {"Job Name"}, {
+        {"Error1", each Text.Combine([FormattedLine], "#(lf)"), type text}
+    }),
+
+    MergeBack = Table.NestedJoin(Source, {"Job Name"}, Grouped, {"Job Name"}, "GroupJoin", JoinKind.LeftOuter),
+    AddError1 = Table.AddColumn(MergeBack, "Error1", each try [GroupJoin]{0}[Error1] otherwise null),
+    Result = Table.RemoveColumns(AddError1, {"GroupJoin"})
+in
+    Result
+
+
 IF StartsWith([YourColumn], "ABC") THEN 
     RIGHT([YourColumn], Length([YourColumn]) - 3) 
 ELSE 
