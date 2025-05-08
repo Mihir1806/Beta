@@ -1,5 +1,55 @@
 
 let
+    // STEP 1: Load your tables from Excel (or Power BI Data Model)
+    LOG_STATUS = Excel.CurrentWorkbook(){[Name="LOG_STATUS"]}[Content],
+    ToolList = Excel.CurrentWorkbook(){[Name="ToolList"]}[Content],
+
+    // STEP 2: Clean ToolList and build Tool Dictionary
+    CleanToolList = Table.TransformColumns(ToolList, {{"Tool ID", Text.Trim, type text}, {"Tool Name", Text.Trim, type text}}),
+    ToolRows = Table.ToRows(CleanToolList),
+    ToolDict = List.Accumulate(ToolRows, [], (state, row) => Record.AddField(state, row{0}, row{1})),
+
+    // STEP 3: Transform LOG_STATUS - Add new column with Tool Name injected
+    AddEnhancedError1Column = Table.AddColumn(LOG_STATUS, "Error1 With Tool Name", each
+        let
+            OriginalError = [Error1],
+            ErrorParts = Text.Split(OriginalError, ";"),
+            TransformedParts = List.Transform(ErrorParts, each
+                let
+                    part = Text.Trim(_),
+                    toolStart = Text.PositionOf(part, "ToolId "),
+                    result = if toolStart >= 0 then
+                        let
+                            // Try to extract ToolId from part (up to next space or colon)
+                            subPart = Text.Middle(part, toolStart),
+                            idText = Text.BeforeAny(Text.AfterDelimiter(subPart, "ToolId ", {0}), {":", " ", ";"}),
+                            fullId = "ToolId " & idText,
+                            toolName = Record.FieldOrDefault(ToolDict, fullId, "Tool Not Found"),
+                            newText = Text.Replace(part, fullId, fullId & "(Tool Name: " & toolName & ")")
+                        in
+                            newText
+                    else
+                        part
+                in
+                    result
+            ),
+            FinalError = Text.Combine(TransformedParts, "; ")
+        in
+            FinalError
+    )
+in
+    AddEnhancedError1Column
+
+
+
+
+
+
+
+
+
+
+let
     // Step 1: Base tables
     Source = LOG_STATUS,
     ToolList = ToolList,  // Already loaded table
