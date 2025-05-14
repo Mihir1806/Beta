@@ -1,3 +1,13 @@
+let
+    logText = [Complete Log],
+    splitByTable = Text.Split(logText, "Table:"),
+    lastBlock = if List.Count(splitByTable) > 1 then List.Last(splitByTable) else "",
+    lastSet = Text.BeforeDelimiter(lastBlock, "End of Table"),
+    cleaned = Text.Trim(lastSet)
+in
+    cleaned
+
+
 = Table.AddColumn(YourPreviousStepName, "JobFrequency", each 
     if Text.Contains([jobname], "_Daily_") or Text.Contains([jobname], "_D_") then "Daily" 
     else if Text.Contains([jobname], "_Monthly_") or Text.Contains([jobname], "_M_") then "Monthly" 
