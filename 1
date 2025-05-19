@@ -1,3 +1,26 @@
+WITH formatted AS (
+  SELECT *, TO_DATE("Date Picker", 'DDMMYYYY') AS dt
+  FROM AccountsTable
+),
+lm AS (
+  SELECT * FROM formatted
+  WHERE DATE_TRUNC('month', dt) = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+),
+blm AS (
+  SELECT * FROM formatted
+  WHERE DATE_TRUNC('month', dt) = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '2 month')
+)
+SELECT * FROM lm
+WHERE "Account Number" NOT IN (SELECT "Account Number" FROM blm)
+UNION ALL
+SELECT * FROM blm
+WHERE "Account Number" NOT IN (SELECT "Account Number" FROM lm);
+
+
+
+
+
+
 WITH 
 Formatted AS (
     SELECT *,
