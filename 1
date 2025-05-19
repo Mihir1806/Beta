@@ -1,4 +1,35 @@
 WITH formatted AS (
+  SELECT *, 
+         TRY_CAST(CONVERT(date, STUFF(STUFF("Date Picker", 5, 0, '-'), 3, 0, '-') ) AS date) AS dt
+  FROM AccountsTable
+  WHERE LEN("Date Picker") = 8
+),
+dates AS (
+  SELECT 
+    EOMONTH(GETDATE(), -1) AS last_month,
+    EOMONTH(GETDATE(), -2) AS before_last_month
+),
+lm AS (
+  SELECT f.*
+  FROM formatted f, dates d
+  WHERE EOMONTH(f.dt) = d.last_month
+),
+blm AS (
+  SELECT f.*
+  FROM formatted f, dates d
+  WHERE EOMONTH(f.dt) = d.before_last_month
+)
+SELECT * FROM lm
+WHERE "Account Number" NOT IN (SELECT "Account Number" FROM blm)
+UNION ALL
+SELECT * FROM blm
+WHERE "Account Number" NOT IN (SELECT "Account Number" FROM lm);
+
+
+
+
+
+WITH formatted AS (
   SELECT *, TO_DATE("Date Picker", 'DDMMYYYY') AS dt
   FROM AccountsTable
 ),
