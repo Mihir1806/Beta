@@ -1,4 +1,48 @@
 WITH 
+Formatted AS (
+    SELECT *,
+           TO_DATE("Date Picker", 'DDMMYYYY') AS formatted_date
+    FROM AccountsTable
+),
+
+LastMonth AS (
+    SELECT * 
+    FROM Formatted
+    WHERE DATE_TRUNC('month', formatted_date) = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+),
+
+BeforeLastMonth AS (
+    SELECT * 
+    FROM Formatted
+    WHERE DATE_TRUNC('month', formatted_date) = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '2 month')
+),
+
+OnlyInLastMonth AS (
+    SELECT lm.*
+    FROM LastMonth lm
+    LEFT JOIN BeforeLastMonth blm
+        ON lm."Account Number" = blm."Account Number"
+    WHERE blm."Account Number" IS NULL
+),
+
+OnlyInBeforeLastMonth AS (
+    SELECT blm.*
+    FROM BeforeLastMonth blm
+    LEFT JOIN LastMonth lm
+        ON blm."Account Number" = lm."Account Number"
+    WHERE lm."Account Number" IS NULL
+)
+
+SELECT * FROM OnlyInLastMonth
+UNION ALL
+SELECT * FROM OnlyInBeforeLastMonth;
+
+
+
+
+
+
+WITH 
 LastMonth AS (
     SELECT * 
     FROM AccountsTable
