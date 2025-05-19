@@ -1,3 +1,33 @@
+SELECT *
+FROM (
+  SELECT *, TO_DATE("Date Picker", 'DDMMYYYY') AS dt
+  FROM AccountsTable
+  WHERE LENGTH("Date Picker") = 8
+) AS formatted
+WHERE (
+  DATE_TRUNC('month', dt) = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+  AND "Account Number" NOT IN (
+    SELECT "Account Number"
+    FROM AccountsTable
+    WHERE LENGTH("Date Picker") = 8
+      AND DATE_TRUNC('month', TO_DATE("Date Picker", 'DDMMYYYY')) = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '2 month')
+  )
+)
+OR (
+  DATE_TRUNC('month', dt) = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '2 month')
+  AND "Account Number" NOT IN (
+    SELECT "Account Number"
+    FROM AccountsTable
+    WHERE LENGTH("Date Picker") = 8
+      AND DATE_TRUNC('month', TO_DATE("Date Picker", 'DDMMYYYY')) = DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+  )
+);
+
+
+
+
+
+
 WITH formatted AS (
   SELECT *, 
          TRY_CAST(CONVERT(date, STUFF(STUFF("Date Picker", 5, 0, '-'), 3, 0, '-') ) AS date) AS dt
