@@ -1,3 +1,29 @@
+-- Convert Position Date if stored as string
+WITH formatted_data AS (
+    SELECT 
+        [Master Account Number],
+        [Sub Account Number],
+        CAST(CONVERT(date, SUBSTRING([Position Date], 5, 4) + SUBSTRING([Position Date], 3, 2) + SUBSTRING([Position Date], 1, 2), 112) AS DATE) AS Position_Date,
+        [Total Outstanding (RM) - CIR]
+    FROM account_positions
+),
+
+-- Get the two latest Position Dates
+latest_two_dates AS (
+    SELECT DISTINCT TOP 2 Position_Date
+    FROM formatted_data
+    ORDER BY Position_Date DESC
+)
+
+-- Final comparison
+SELECT *
+FROM formatted_data
+WHERE Position_Date IN (SELECT Position_Date FROM latest_two_dates)
+ORDER BY [Sub Account Number], Position_Date;
+
+
+
+
 SELECT *
 FROM (
   SELECT *, TO_DATE("Date Picker", 'DDMMYYYY') AS dt
