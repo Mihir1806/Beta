@@ -1,3 +1,11 @@
+SELECT * 
+FROM ISEA_MY_CCRIS_SDIS02
+WHERE TO_CHAR(LAST_DAY(ADD_MONTHS(Insert_DateTime, -1)), 'MON-YY') = 
+      TO_CHAR(LAST_DAY(ADD_MONTHS(TO_DATE('31-DEC-2023', 'DD-MON-YYYY'), 0)), 'MON-YY')
+
+
+
+
 I have attached a Word document that contains flow trees (either diagrams or text-based) along with some related data or conditions.
 
 Please:
