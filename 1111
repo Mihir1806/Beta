@@ -1,3 +1,14 @@
+I hope this message finds you well.
+
+During our recent data extraction, we identified a discrepancy in the TSEAA_ITIS_CASH_CLIENT table. Specifically, the amount recorded for reference ‘abc’ appears to be incorrect.
+
+Could you kindly assist in reviewing this entry and verifying the correct amount? Please let us know if any further information or clarification is required from our side to facilitate this check.
+
+Looking forward to your response.
+
+
+
+
 import requests
 from bs4 import BeautifulSoup
 import pandas as pd
