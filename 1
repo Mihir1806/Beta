@@ -1,3 +1,22 @@
+
+I have two pandas DataFrames:
+	1.	result3 with columns:
+	•	SubProductIAS
+	•	Type of operation
+	2.	SubProduct with columns:
+	•	code
+	•	niv_1 to niv_5 (representing hierarchy levels from top to bottom)
+
+Each row in SubProduct represents the full hierarchy path of the sub-product listed in the code column.
+
+Task:
+Using the hierarchy from SubProduct, determine whether SubProductIAS is a descendant (any level) of the immediate parent of Type of operation for each row in result3. Based on this, divide result3 into two separate DataFrames:
+	•	result_3a: matching rows
+	•	result_3b: non-matching rows
+
+
+
+
 SELECT * 
 FROM ISEA_MY_CCRIS_SDIS02
 WHERE TO_CHAR(LAST_DAY(ADD_MONTHS(Insert_DateTime, -1)), 'MON-YY') = 
