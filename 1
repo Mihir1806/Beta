@@ -1,3 +1,15 @@
+IF IsNull([Col1]) THEN "Col1 is null" ELSE "" ENDIF
++ IIF(IsNull([Col2]), IIF(IsEmpty([Comment]), "Col2 is null", ", Col2 is null"), "")
++ IIF(IsNull([Col3]), IIF(IsEmpty([Comment]), "Col3 is null", ", Col3 is null"), "")
++ IIF(IsNull([Col4]), IIF(IsEmpty([Comment]), "Col4 is null", ", Col4 is null"), "")
++ IIF(IsNull([Col5]), IIF(IsEmpty([Comment]), "Col5 is null", ", Col5 is null"), "")
++ IIF(IsNull([Col6]), IIF(IsEmpty([Comment]), "Col6 is null", ", Col6 is null"), "")
++ IIF(IsNull([Col7]), IIF(IsEmpty([Comment]), "Col7 is null", ", Col7 is null"), "")
+
+
+
+
+
 Build a complete Python application using Flask with the following features:
 
 ⸻
