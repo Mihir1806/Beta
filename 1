@@ -1,3 +1,12 @@
+IF IsNull([Col1]) THEN "Col1 is null" + '\n' ELSE "" ENDIF +
+IF IsNull([Col2]) THEN "Col2 is null" + '\n' ELSE "" ENDIF +
+IF IsNull([Col3]) THEN "Col3 is null" + '\n' ELSE "" ENDIF +
+IF IsNull([Col4]) THEN "Col4 is null" + '\n' ELSE "" ENDIF +
+IF IsNull([Col5]) THEN "Col5 is null" + '\n' ELSE "" ENDIF +
+IF IsNull([Col6]) THEN "Col6 is null" + '\n' ELSE "" ENDIF +
+IF IsNull([Col7]) THEN "Col7 is null" + '\n' ELSE "" ENDIF
+
+
 IF IsNull([Col1]) THEN "Col1 is null" ELSE "" ENDIF
 + IIF(IsNull([Col2]), IIF(IsEmpty([Comment]), "Col2 is null", ", Col2 is null"), "")
 + IIF(IsNull([Col3]), IIF(IsEmpty([Comment]), "Col3 is null", ", Col3 is null"), "")
