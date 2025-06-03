@@ -1,3 +1,22 @@
+•	Table 1 has columns A and B
+	•	Table 2 has columns C and NIV, where NIV indicates a hierarchy level from NIV1 (highest) to NIV5 (lowest).
+
+I want Python code (using pandas) that does the following:
+	1.	For each row in Table 1, take the value from column A.
+	2.	Search for this value in column C of Table 2. If found, get its NIV level.
+	3.	Try to find its parent by looking for a value in column C with a higher NIV level (e.g., if the value is at NIV5, check for a parent at NIV4, then NIV3, and so on up to NIV1).
+	4.	If a parent is found and that parent value exists in column B of the same row in Table 1, then place the entire row from Table 1 into Table 3A.
+	5.	If not, place the entire row into Table 3B instead.
+
+The output should be two Excel sheets: Table3A and Table3B.
+
+
+
+
+
+
+
+
 REGEX_Replace([Comment], "(\r\n)+$", "")
 
 
