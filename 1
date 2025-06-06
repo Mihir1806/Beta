@@ -1,22 +1,24 @@
-Build a Python Flask web app with an HTML frontend that:
-	•	Accepts a folder path containing multiple Alteryx workflows (.yxmd, .yxmc)
-	•	Parses each workflow extracting formulas from Formula, Multi-Row Formula, and Filter tools
-	•	Displays a table with columns:
-	1.	Alteryx (workflow filename)
+Build a Python Flask web application with an engaging and user-friendly HTML frontend that allows users to select and upload multiple Alteryx workflow files (.yxmd) at once. The app should:
+	•	Parse each workflow to extract formulas from Formula, Multi-Row Formula, and Filter tools.
+	•	Display a clean, visually appealing table with these columns:
+	1.	Workflow filename
 	2.	Tool Type (Formula, Multi-Row Formula, Filter)
-	3.	Formula (original Alteryx formula/expression)
-	4.	Spark SQL (the equivalent Spark SQL expression converted from the Alteryx formula)
-	•	Supports downloading the results as CSV or Excel
-	•	Use only Python and HTML, no JS frameworks
-
-The conversion logic from Alteryx formula to Spark SQL should handle common functions and operators such as:
-	•	IF → CASE WHEN
-	•	AND, OR, NOT → same in SQL
+	3.	Original Alteryx formula/expression
+	4.	Equivalent Spark SQL expression converted from the Alteryx formula
+	•	Convert Alteryx formulas to Spark SQL expressions handling:
+	•	IF statements → CASE WHEN
+	•	Logical operators AND, OR, NOT
 	•	String functions like LEFT(), RIGHT(), UPPER(), LOWER()
-	•	Arithmetic operators
-	•	Basic date/time functions
+	•	Arithmetic and basic date/time functions
+	•	Provide intuitive UI features such as:
+	•	A stylish browse button for folder or multiple file selection
+	•	Clear, responsive layout with consistent spacing, readable fonts, and subtle colors for ease of use
+	•	Table with alternating row colors and hover effects for better readability
+	•	Include download buttons for exporting the results as CSV or Excel files
+	•	Use only Python and HTML (no JavaScript frameworks), but CSS styling is encouraged for better look and feel
 
-Provide a clean, user-friendly UI with a browse button for folder selection.
+
+
 
 
 
