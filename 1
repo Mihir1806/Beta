@@ -1,3 +1,51 @@
+Objective:
+Create a web-based tool with a user-friendly interface that allows users to input Alteryx formulas and converts them into equivalent Spark SQL expressions.
+
+⸻
+
+✅ Requirements:
+
+1. Frontend (HTML + CSS + JavaScript)
+	•	Input text area for entering Alteryx formula
+	•	“Convert” button to trigger conversion
+	•	Read-only output area showing the Spark SQL result
+	•	“Copy” button to copy the output to clipboard
+	•	Responsive and modern UI (clean, colorful, intuitive)
+	•	Tooltip or help text with example formula
+
+2. Backend (Python with Flask)
+	•	Receives Alteryx formula input from frontend
+	•	Processes and converts common Alteryx functions to Spark SQL equivalents
+	•	e.g., IIF() → CASE WHEN, DateTimeAdd() → DATE_ADD(), && → AND, etc.
+	•	Sends back the converted formula to display on the page
+
+3. Functionality
+	•	No page reload (can be simple POST request or basic interactivity)
+	•	Accurate formula conversion logic
+	•	Easy to extend with more Alteryx functions
+
+⸻
+
+🧪 Example:
+
+Input:
+IIF([Sales] > 1000, "High", "Low")
+
+Output:
+CASE WHEN Sales > 1000 THEN "High" ELSE "Low" END
+
+
+
+
+
+
+
+
+
+
+
+
+
 •	Table 1 has columns A and B
 	•	Table 2 has columns C and NIV, where NIV indicates a hierarchy level from NIV1 (highest) to NIV5 (lowest).
 
