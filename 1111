@@ -1,61 +1,42 @@
-I hope this message finds you well.
+Objective:
+Create a user-friendly web app using Python (Flask) and HTML that allows users to upload multiple Alteryx workflows (.yxmd/.yxmc), extracts formulas from Formula, Multi-Row Formula, and Filter tools, and converts them to Spark SQL.
 
-During our recent data extraction, we identified a discrepancy in the TSEAA_ITIS_CASH_CLIENT table. Specifically, the amount recorded for reference ‘abc’ appears to be incorrect.
+⸻
 
-Could you kindly assist in reviewing this entry and verifying the correct amount? Please let us know if any further information or clarification is required from our side to facilitate this check.
+🔧 Functionality Requirements:
+	1.	File Upload:
+	•	Allow users to upload multiple Alteryx workflows (.yxmd/.yxmc) using a file browser.
+	•	Only .yxmd and .yxmc formats should be allowed.
+	2.	Formula Extraction:
+	•	Parse uploaded XML files and extract expressions from:
+	•	Formula tools
+	•	Multi-Row Formula tools
+	•	Filter tools
+	3.	Conversion Logic:
+	•	Convert Alteryx expressions to Spark SQL by handling:
+	•	IF...THEN...ELSE...ENDIF → CASE WHEN THEN ELSE END
+	•	Logical operators: AND, OR, NOT
+	•	String functions: LEFT(), RIGHT(), UPPER(), LOWER(), Contains()
+	•	Date/Time: DateTimeNow() → CURRENT_TIMESTAMP()
+	•	Add more pattern mappings as needed
+	4.	Interactive Table:
+	•	Display results in a table with columns:
+	1.	Alteryx Workflow
+	2.	Tool Type
+	3.	Alteryx Formula
+	4.	Converted Spark SQL
+	•	Add inline editing for both formulas (original & converted).
+	•	Support saving changes in the table.
+	5.	Download Option:
+	•	Include a “Download as Excel” button to export the table data.
 
-Looking forward to your response.
+⸻
 
-
-
-
-import requests
-from bs4 import BeautifulSoup
-import pandas as pd
-import os
-
-# URL of the FEDAI Revaluation Rates page
-url = "https://fedai.org.in/RevaluationRates.aspx?Cid=1&SCid=0"
-base_url = "https://fedai.org.in"
-
-# Fetch the page content
-response = requests.get(url)
-soup = BeautifulSoup(response.text, "html.parser")
-
-# Find the table rows containing revaluation data
-table_rows = soup.find_all("tr")[1:]  # Skip header row
-
-# Parse the rows
-data = []
-for row in table_rows:
-    cells = row.find_all("td")
-    if len(cells) >= 2:
-        date_time = cells[0].text.strip()
-        link_tag = cells[1].find("a")
-        label = link_tag.text.strip() if link_tag else cells[1].text.strip()
-        href = link_tag['href'] if link_tag and link_tag.has_attr('href') else None
-        full_url = base_url + href if href else None
-        data.append({
-            "Date & Time": date_time,
-            "Label": label,
-            "Excel URL": full_url
-        })
-
-# Convert to DataFrame
-df = pd.DataFrame(data)
-
-# Show the scraped table
-print(df)
-
-# Optional: Download Excel files to a folder
-download_folder = "fedai_excels"
-os.makedirs(download_folder, exist_ok=True)
-
-for index, row in df.iterrows():
-    if row["Excel URL"]:
-        file_name = f"{row['Label'].replace(' ', '_').replace('/', '-')}.xlsx"
-        file_path = os.path.join(download_folder, file_name)
-        file_response = requests.get(row["Excel URL"])
-        with open(file_path, "wb") as f:
-            f.write(file_response.content)
-        print(f"Downloaded: {file_name}")
+🎨 UI/UX Requirements:
+	•	Clean, responsive layout using HTML + CSS (Bootstrap or custom)
+	•	Intuitive flow:
+	•	Upload → Convert → View → Edit → Export
+	•	Optional enhancements:
+	•	✅ Highlight differences in formula (diff view)
+	•	✅ Filter/search by workflow or tool
+	•	✅ Dark/light mode toggle
