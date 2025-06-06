@@ -1,42 +1,151 @@
-Objective:
-Create a user-friendly web app using Python (Flask) and HTML that allows users to upload multiple Alteryx workflows (.yxmd/.yxmc), extracts formulas from Formula, Multi-Row Formula, and Filter tools, and converts them to Spark SQL.
+from flask import Flask, request, render_template_string, send_file
+import xml.etree.ElementTree as ET
+import pandas as pd
+import os
+import tempfile
 
-⸻
+app = Flask(__name__)
+UPLOAD_FOLDER = tempfile.mkdtemp()
 
-🔧 Functionality Requirements:
-	1.	File Upload:
-	•	Allow users to upload multiple Alteryx workflows (.yxmd/.yxmc) using a file browser.
-	•	Only .yxmd and .yxmc formats should be allowed.
-	2.	Formula Extraction:
-	•	Parse uploaded XML files and extract expressions from:
-	•	Formula tools
-	•	Multi-Row Formula tools
-	•	Filter tools
-	3.	Conversion Logic:
-	•	Convert Alteryx expressions to Spark SQL by handling:
-	•	IF...THEN...ELSE...ENDIF → CASE WHEN THEN ELSE END
-	•	Logical operators: AND, OR, NOT
-	•	String functions: LEFT(), RIGHT(), UPPER(), LOWER(), Contains()
-	•	Date/Time: DateTimeNow() → CURRENT_TIMESTAMP()
-	•	Add more pattern mappings as needed
-	4.	Interactive Table:
-	•	Display results in a table with columns:
-	1.	Alteryx Workflow
-	2.	Tool Type
-	3.	Alteryx Formula
-	4.	Converted Spark SQL
-	•	Add inline editing for both formulas (original & converted).
-	•	Support saving changes in the table.
-	5.	Download Option:
-	•	Include a “Download as Excel” button to export the table data.
+# Function to extract formulas and convert them
+def extract_and_convert_formulas(file_path, filename):
+    tree = ET.parse(file_path)
+    root = tree.getroot()
+    results = []
 
-⸻
+    for node in root.iter():
+        tool_type = None
+        formulas = []
 
-🎨 UI/UX Requirements:
-	•	Clean, responsive layout using HTML + CSS (Bootstrap or custom)
-	•	Intuitive flow:
-	•	Upload → Convert → View → Edit → Export
-	•	Optional enhancements:
-	•	✅ Highlight differences in formula (diff view)
-	•	✅ Filter/search by workflow or tool
-	•	✅ Dark/light mode toggle
+        # Detect tool types and fetch expressions
+        if node.tag.endswith("Formula"):
+            tool_type = "Formula"
+            formulas = node.findall('.//Formula')
+        elif node.tag.endswith("MultiRowFormula"):
+            tool_type = "Multi-Row Formula"
+            formulas = node.findall('.//Expression')
+        elif node.tag.endswith("Filter"):
+            tool_type = "Filter"
+            formulas = node.findall('.//Expression')
+
+        for f in formulas:
+            original = f.text or ""
+            converted = convert_to_spark_sql(original)
+            results.append({
+                "Workflow": filename,
+                "Tool Type": tool_type,
+                "Alteryx Formula": original.strip(),
+                "Spark SQL": converted.strip()
+            })
+
+    return results
+
+# Basic conversion logic
+def convert_to_spark_sql(formula):
+    if not formula:
+        return ""
+    formula = formula.replace("IF ", "CASE WHEN ")
+    formula = formula.replace(" THEN ", " THEN ")
+    formula = formula.replace(" ELSE ", " ELSE ")
+    formula = formula.replace("ENDIF", " END")
+    formula = formula.replace("AND", "AND")
+    formula = formula.replace("OR", "OR")
+    formula = formula.replace("NOT", "NOT")
+    formula = formula.replace("LEFT(", "SUBSTRING(")
+    formula = formula.replace("RIGHT(", "SUBSTRING(")
+    formula = formula.replace("UPPER(", "UPPER(")
+    formula = formula.replace("LOWER(", "LOWER(")
+    formula = formula.replace("Contains(", "LIKE CONCAT('%', ")
+    formula = formula.replace("DateTimeNow()", "CURRENT_TIMESTAMP()")
+    return formula
+
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    table = []
+    if request.method == 'POST':
+        files = request.files.getlist('files')
+        all_results = []
+
+        for file in files:
+            filename = file.filename
+            file_path = os.path.join(UPLOAD_FOLDER, filename)
+            file.save(file_path)
+            results = extract_and_convert_formulas(file_path, filename)
+            all_results.extend(results)
+
+        df = pd.DataFrame(all_results)
+        df.to_excel(os.path.join(UPLOAD_FOLDER, 'converted.xlsx'), index=False)
+        table = all_results
+
+    return render_template_string(HTML_TEMPLATE, table=table)
+
+@app.route('/download')
+def download():
+    return send_file(os.path.join(UPLOAD_FOLDER, 'converted.xlsx'), as_attachment=True)
+
+# Inline HTML UI
+HTML_TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>🧠 Alteryx to Spark SQL Converter</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        h2 { color: #333; }
+        input[type="file"] { padding: 8px; }
+        .btn {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+        .btn:hover { background-color: #0056b3; }
+        table {
+            margin-top: 30px;
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 10px;
+            border: 1px solid #ccc;
+            vertical-align: top;
+            text-align: left;
+        }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <h2>🧠 Alteryx Workflow Formula → Spark SQL Converter</h2>
+    <form method="POST" enctype="multipart/form-data">
+        <label>Select .yxmd/.yxmc Files:</label><br><br>
+        <input type="file" name="files" multiple required><br><br>
+        <button class="btn" type="submit">Convert & View Results</button>
+    </form>
+
+    {% if table %}
+        <br><a class="btn" href="/download">⬇ Download Excel</a>
+        <table>
+            <tr>
+                <th>Workflow</th>
+                <th>Tool Type</th>
+                <th>Alteryx Formula</th>
+                <th>Spark SQL</th>
+            </tr>
+            {% for row in table %}
+                <tr>
+                    <td>{{ row['Workflow'] }}</td>
+                    <td>{{ row['Tool Type'] }}</td>
+                    <td>{{ row['Alteryx Formula'] }}</td>
+                    <td>{{ row['Spark SQL'] }}</td>
+                </tr>
+            {% endfor %}
+        </table>
+    {% endif %}
+</body>
+</html>
+"""
+
+if __name__ == '__main__':
+    app.run(debug=True)
