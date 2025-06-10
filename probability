@@ -1,243 +1,776 @@
-from flask import Flask, request, render_template_string, send_file, redirect
+from flask import Flask, request, render_template, send_file, jsonify
 import pandas as pd
+import numpy as np
 import io
 import json
-import itertools
+from sklearn.naive_bayes import GaussianNB
+from sklearn.preprocessing import LabelEncoder
 from werkzeug.utils import secure_filename
+import os
+from difflib import SequenceMatcher
 
 app = Flask(__name__)
+app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB limit
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
-# In-memory storage
-data_store = {
-    'master': None,
-    'transaction': None,
-    'master_sheets': [],
-    'transaction_sheets': [],
-    'config': {}
+# Global variables
+master_data = None
+transaction_data = None
+current_config = {
+    "primary_key": "",
+    "end_key": "",
+    "sheet_selection": "first",
+    "mappings": []
 }
 
-TEMPLATE = """
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ['xlsx', 'xls']
+
+def read_excel(file, sheet_selection):
+    try:
+        xls = pd.ExcelFile(file)
+        if sheet_selection == "first":
+            return pd.read_excel(xls, sheet_name=xls.sheet_names[0])
+        elif sheet_selection == "all":
+            return pd.concat([pd.read_excel(xls, sheet_name=sheet) for sheet in xls.sheet_names])
+        else:
+            return pd.read_excel(xls, sheet_name=sheet_selection)
+    except Exception as e:
+        return None
+
+def fuzzy_match(str1, str2):
+    return SequenceMatcher(None, str1, str2).ratio()
+
+def process_mapping(row, master_row, mapping):
+    if mapping['is_range']:
+        try:
+            val = float(row[mapping['transaction_column']])
+            min_val = float(master_row[mapping['master_column']])
+            max_val = float(master_row[mapping.get('range_column', mapping['master_column'])])
+            return min_val <= val <= max_val
+        except:
+            return False
+    else:
+        return str(row[mapping['transaction_column']]).lower() == str(master_row[mapping['master_column']]).lower()
+
+def analyze_mismatches(row, master_row, mappings):
+    reasons = []
+    for mapping in mappings:
+        if not process_mapping(row, master_row, mapping):
+            if mapping['is_range']:
+                reasons.append(f"{mapping['transaction_column']} value {row[mapping['transaction_column']]} outside range")
+            else:
+                reasons.append(f"{mapping['transaction_column']} value mismatch")
+    return "; ".join(reasons)
+
+def train_naive_bayes(master_df, end_key):
+    try:
+        # Prepare data
+        X = master_df.drop(columns=[end_key]).select_dtypes(include=[np.number])
+        y = master_df[end_key]
+        
+        if len(X.columns) == 0 or len(y.unique()) < 2:
+            return None
+            
+        # Train model
+        model = GaussianNB()
+        model.fit(X, y)
+        return model
+    except:
+        return None
+
+@app.route('/', methods=['GET'])
+def index():
+    return render_template('index.html')
+
+@app.route('/upload', methods=['POST'])
+def upload_files():
+    global master_data, transaction_data, current_config
+    
+    if 'master' not in request.files or 'transaction' not in request.files:
+        return jsonify({"error": "Both files are required"}), 400
+    
+    master_file = request.files['master']
+    transaction_file = request.files['transaction']
+    
+    if not (allowed_file(master_file.filename) and allowed_file(transaction_file.filename)):
+        return jsonify({"error": "Only Excel files are allowed"}), 400
+    
+    master_data = read_excel(master_file, current_config['sheet_selection'])
+    transaction_data = read_excel(transaction_file, current_config['sheet_selection'])
+    
+    if master_data is None or transaction_data is None:
+        return jsonify({"error": "Error reading Excel files"}), 400
+    
+    return jsonify({
+        "master_columns": list(master_data.columns),
+        "transaction_columns": list(transaction_data.columns),
+        "master_preview": master_data.head().to_dict(orient='records'),
+        "transaction_preview": transaction_data.head().to_dict(orient='records')
+    })
+
+@app.route('/config', methods=['POST'])
+def handle_config():
+    global current_config
+    
+    if request.method == 'POST':
+        if 'file' in request.files:
+            config_file = request.files['file']
+            if config_file and allowed_file(config_file.filename):
+                try:
+                    current_config = json.load(config_file)
+                    return jsonify({"status": "success", "config": current_config})
+                except:
+                    return jsonify({"error": "Invalid config file"}), 400
+        else:
+            try:
+                config_data = request.get_json()
+                current_config.update(config_data)
+                return jsonify({"status": "success", "config": current_config})
+            except:
+                return jsonify({"error": "Invalid config data"}), 400
+
+@app.route('/download_config', methods=['GET'])
+def download_config():
+    config_str = json.dumps(current_config, indent=2)
+    return send_file(
+        io.BytesIO(config_str.encode()),
+        mimetype='application/json',
+        as_attachment=True,
+        download_name='mapping_config.json'
+    )
+
+@app.route('/process', methods=['POST'])
+def process_data():
+    global master_data, transaction_data, current_config
+    
+    if master_data is None or transaction_data is None:
+        return jsonify({"error": "Please upload files first"}), 400
+    
+    if not current_config['primary_key'] or not current_config['end_key']:
+        return jsonify({"error": "Primary key and end key must be set"}), 400
+    
+    # Prepare results dataframe
+    result_df = transaction_data.copy()
+    result_df['Match_Status'] = ""
+    result_df['Suggested_Value'] = ""
+    result_df['Confidence_Percent'] = ""
+    result_df['Mismatch_Reasons'] = ""
+    
+    # Train ML model
+    ml_model = train_naive_bayes(master_data, current_config['end_key'])
+    
+    # Process each transaction row
+    for idx, row in transaction_data.iterrows():
+        # Find matching master record by primary key
+        master_match = master_data[master_data[current_config['primary_key']] == row[current_config['primary_key']]]
+        
+        if len(master_match) == 0:
+            result_df.at[idx, 'Match_Status'] = "Not Found"
+            continue
+        
+        master_row = master_match.iloc[0]
+        
+        # Check end key match
+        if str(row[current_config['end_key']]).lower() == str(master_row[current_config['end_key']]).lower():
+            result_df.at[idx, 'Match_Status'] = "Valid"
+            continue
+        
+        result_df.at[idx, 'Match_Status'] = "Mismatch"
+        
+        # Analyze mismatches
+        reasons = analyze_mismatches(row, master_row, current_config['mappings'])
+        result_df.at[idx, 'Mismatch_Reasons'] = reasons
+        
+        # If ML model exists, get predictions
+        if ml_model:
+            try:
+                X = master_data.drop(columns=[current_config['end_key']]).select_dtypes(include=[np.number])
+                probs = ml_model.predict_proba(X)
+                top3_idx = np.argsort(probs, axis=1)[:, -3:][0]
+                top3_values = ml_model.classes_[top3_idx]
+                top3_probs = probs[0, top3_idx]
+                
+                result_df.at[idx, 'Suggested_Value'] = str(top3_values[0])
+                result_df.at[idx, 'Confidence_Percent'] = f"{top3_probs[0]*100:.1f}%"
+            except:
+                pass
+    
+    # Prepare output
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        result_df.to_excel(writer, index=False, sheet_name='Results')
+    
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        as_attachment=True,
+        download_name='enhanced_transaction.xlsx'
+    )
+
+# HTML Template
+@app.route('/template')
+def template():
+    return '''
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Excel Matcher</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Excel Data Matcher</title>
     <style>
-        body { font-family: Arial; background: #f4f4f4; margin: 40px; }
-        .container { background: white; padding: 20px; border-radius: 8px; }
-        input[type=file], select, button { margin: 10px 0; padding: 8px; width: 100%; }
-        table, th, td { border: 1px solid #aaa; border-collapse: collapse; padding: 6px; }
-        th { background-color: #eee; }
-        .section { margin-top: 30px; }
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #333;
+        }
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background: #f9f9f9;
+        }
+        .file-upload {
+            margin-bottom: 15px;
+        }
+        .preview-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .preview-table th, .preview-table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        .preview-table th {
+            background-color: #f2f2f2;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        select, input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .mapping-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+        .mapping-row select {
+            flex: 1;
+        }
+        .mapping-row button {
+            flex: 0 0 auto;
+            background-color: #f44336;
+        }
+        .tab {
+            overflow: hidden;
+            border: 1px solid #ccc;
+            background-color: #f1f1f1;
+            border-radius: 5px 5px 0 0;
+        }
+        .tab button {
+            background-color: inherit;
+            float: left;
+            border: none;
+            outline: none;
+            cursor: pointer;
+            padding: 10px 16px;
+            transition: 0.3s;
+        }
+        .tab button:hover {
+            background-color: #ddd;
+        }
+        .tab button.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+        .tabcontent {
+            display: none;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-top: none;
+            border-radius: 0 0 5px 5px;
+            background: white;
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #dff0d8;
+            color: #3c763d;
+        }
+        .error {
+            background-color: #f2dede;
+            color: #a94442;
+        }
     </style>
 </head>
 <body>
     <div class="container">
-        <h2>Excel Match Analyzer</h2>
-
-        <form method="post" action="/upload" enctype="multipart/form-data">
-            <label>Upload Master File:</label>
-            <input type="file" name="master_file">
-            <label>Upload Transaction File:</label>
-            <input type="file" name="transaction_file">
-            <button type="submit">Upload Files</button>
-        </form>
-
-        {% if master_sheets %}
-        <div class="section">
-            <form method="post" action="/configure">
-                <label>Select Master Sheet:</label>
-                <select name="master_sheet">
-                    {% for sheet in master_sheets %}
-                        <option value="{{sheet}}">{{sheet}}</option>
-                    {% endfor %}
-                </select>
-
-                <label>Select Transaction Sheet:</label>
-                <select name="transaction_sheet">
-                    {% for sheet in transaction_sheets %}
-                        <option value="{{sheet}}">{{sheet}}</option>
-                    {% endfor %}
-                </select>
-                <button type="submit">Load Columns</button>
-            </form>
+        <h1>Excel Data Matching Tool</h1>
+        
+        <div class="tab">
+            <button class="tablinks active" onclick="openTab(event, 'upload')">1. Upload Files</button>
+            <button class="tablinks" onclick="openTab(event, 'configure')">2. Configure Mapping</button>
+            <button class="tablinks" onclick="openTab(event, 'process')">3. Process & Download</button>
         </div>
-        {% endif %}
-
-        {% if columns %}
-        <div class="section">
-            <form method="post" action="/analyze">
-                <label>Primary Key (Must match in both files):</label>
-                <select name="primary_key">
-                    {% for col in columns %}
-                        <option value="{{col}}">{{col}}</option>
-                    {% endfor %}
-                </select>
-
-                <h4>Column Mapping:</h4>
-                {% for col in columns %}
-                    <div>
-                        <label>{{col}}:</label>
-                        <select name="map_master_{{col}}">
-                            <option value="">--Master Column--</option>
-                            {% for mc in columns %}
-                                <option value="{{mc}}">{{mc}}</option>
-                            {% endfor %}
-                        </select>
-                        <select name="match_type_{{col}}">
-                            <option value="direct">Direct</option>
-                            <option value="range">Range</option>
-                        </select>
-                    </div>
-                {% endfor %}
-
-                <button type="submit">Analyze</button>
-            </form>
-
-            <form method="post" action="/export_config">
-                <button type="submit">Export Config</button>
-            </form>
-
-            <form method="post" action="/import_config" enctype="multipart/form-data">
-                <input type="file" name="config_file">
-                <button type="submit">Import Config</button>
-            </form>
+        
+        <div id="upload" class="tabcontent" style="display: block;">
+            <h2>Upload Excel Files</h2>
+            <div class="section">
+                <div class="form-group file-upload">
+                    <label for="master">Master File:</label>
+                    <input type="file" id="master" name="master" accept=".xlsx,.xls">
+                </div>
+                <div class="form-group file-upload">
+                    <label for="transaction">Transaction File:</label>
+                    <input type="file" id="transaction" name="transaction" accept=".xlsx,.xls">
+                </div>
+                <div class="form-group">
+                    <label for="sheet_selection">Sheet Selection:</label>
+                    <select id="sheet_selection" name="sheet_selection">
+                        <option value="first">First Sheet Only</option>
+                        <option value="all">All Sheets (Combined)</option>
+                    </select>
+                </div>
+                <button onclick="uploadFiles()">Upload & Preview</button>
+            </div>
+            
+            <div class="section">
+                <h3>Master File Preview</h3>
+                <div id="master-preview"></div>
+            </div>
+            
+            <div class="section">
+                <h3>Transaction File Preview</h3>
+                <div id="transaction-preview"></div>
+            </div>
         </div>
-        {% endif %}
-
-        {% if result %}
-        <div class="section">
-            <h3>Top Matches</h3>
-            <table>
-                <tr>
-                    <th>Transaction ID</th>
-                    <th>Top 3 Matches (Master IDs)</th>
-                    <th>Probabilities (%)</th>
-                    <th>Reason</th>
-                </tr>
-                {% for row in result %}
-                <tr>
-                    <td>{{row['id']}}</td>
-                    <td>{{row['matches']}}</td>
-                    <td>{{row['probs']}}</td>
-                    <td>{{row['reason']}}</td>
-                </tr>
-                {% endfor %}
-            </table>
-            <form method="get" action="/download">
-                <button type="submit">Download Result</button>
-            </form>
+        
+        <div id="configure" class="tabcontent">
+            <h2>Configure Mapping</h2>
+            <div class="section">
+                <div class="form-group">
+                    <label for="primary_key">Primary Key (Unique Identifier):</label>
+                    <select id="primary_key" name="primary_key"></select>
+                </div>
+                <div class="form-group">
+                    <label for="end_key">End Key (Validation Field):</label>
+                    <select id="end_key" name="end_key"></select>
+                </div>
+                
+                <h3>Column Mappings</h3>
+                <div id="mappings-container"></div>
+                <button onclick="addMapping()">Add Mapping</button>
+                
+                <h3>Configuration Management</h3>
+                <div class="form-group">
+                    <label for="config_file">Upload Configuration:</label>
+                    <input type="file" id="config_file" name="config_file" accept=".json">
+                    <button onclick="uploadConfig()">Upload Config</button>
+                </div>
+                <button onclick="downloadConfig()">Download Current Config</button>
+                <button onclick="saveConfig()">Save Configuration</button>
+            </div>
         </div>
-        {% endif %}
+        
+        <div id="process" class="tabcontent">
+            <h2>Process & Download Results</h2>
+            <div class="section">
+                <p>Review your configuration and process the files to generate the enhanced transaction file.</p>
+                <button onclick="processFiles()">Process Files</button>
+                <div id="process-status" class="status"></div>
+            </div>
+        </div>
+        
+        <div id="status-message" class="status"></div>
     </div>
+
+    <script>
+        let masterColumns = [];
+        let transactionColumns = [];
+        
+        function openTab(evt, tabName) {
+            const tabcontent = document.getElementsByClassName("tabcontent");
+            for (let i = 0; i < tabcontent.length; i++) {
+                tabcontent[i].style.display = "none";
+            }
+            
+            const tablinks = document.getElementsByClassName("tablinks");
+            for (let i = 0; i < tablinks.length; i++) {
+                tablinks[i].className = tablinks[i].className.replace(" active", "");
+            }
+            
+            document.getElementById(tabName).style.display = "block";
+            evt.currentTarget.className += " active";
+        }
+        
+        function uploadFiles() {
+            const masterFile = document.getElementById('master').files[0];
+            const transactionFile = document.getElementById('transaction').files[0];
+            const sheetSelection = document.getElementById('sheet_selection').value;
+            
+            if (!masterFile || !transactionFile) {
+                showStatus('Please select both files', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('master', masterFile);
+            formData.append('transaction', transactionFile);
+            formData.append('sheet_selection', sheetSelection);
+            
+            fetch('/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showStatus(data.error, 'error');
+                    return;
+                }
+                
+                masterColumns = data.master_columns;
+                transactionColumns = data.transaction_columns;
+                
+                // Update preview tables
+                document.getElementById('master-preview').innerHTML = createPreviewTable(data.master_preview);
+                document.getElementById('transaction-preview').innerHTML = createPreviewTable(data.transaction_preview);
+                
+                // Update configuration dropdowns
+                updateDropdown('primary_key', masterColumns);
+                updateDropdown('end_key', masterColumns);
+                
+                // Initialize mappings container
+                document.getElementById('mappings-container').innerHTML = '';
+                
+                showStatus('Files uploaded successfully', 'success');
+            })
+            .catch(error => {
+                showStatus('Error uploading files: ' + error, 'error');
+            });
+        }
+        
+        function createPreviewTable(data) {
+            if (!data || data.length === 0) return '<p>No data available</p>';
+            
+            let table = '<table class="preview-table"><thead><tr>';
+            
+            // Create headers
+            for (const key in data[0]) {
+                table += `<th>${key}</th>`;
+            }
+            table += '</tr></thead><tbody>';
+            
+            // Create rows
+            data.forEach(row => {
+                table += '<tr>';
+                for (const key in row) {
+                    table += `<td>${row[key]}</td>`;
+                }
+                table += '</tr>';
+            });
+            
+            table += '</tbody></table>';
+            return table;
+        }
+        
+        function updateDropdown(id, options) {
+            const dropdown = document.getElementById(id);
+            dropdown.innerHTML = '';
+            
+            options.forEach(option => {
+                const element = document.createElement('option');
+                element.value = option;
+                element.textContent = option;
+                dropdown.appendChild(element);
+            });
+        }
+        
+        function addMapping() {
+            if (masterColumns.length === 0 || transactionColumns.length === 0) {
+                showStatus('Please upload files first', 'error');
+                return;
+            }
+            
+            const container = document.getElementById('mappings-container');
+            const mappingId = Date.now();
+            
+            const row = document.createElement('div');
+            row.className = 'mapping-row';
+            row.id = `mapping-${mappingId}`;
+            
+            // Master column dropdown
+            const masterSelect = document.createElement('select');
+            masterSelect.id = `master-col-${mappingId}`;
+            updateDropdown(`master-col-${mappingId}`, masterColumns);
+            
+            // Range checkbox
+            const rangeCheck = document.createElement('input');
+            rangeCheck.type = 'checkbox';
+            rangeCheck.id = `is-range-${mappingId}`;
+            rangeCheck.onchange = function() {
+                document.getElementById(`range-col-${mappingId}`).style.display = this.checked ? 'block' : 'none';
+            };
+            
+            // Range column dropdown (hidden by default)
+            const rangeLabel = document.createElement('label');
+            rangeLabel.textContent = 'Range:';
+            rangeLabel.style.display = 'none';
+            rangeLabel.id = `range-col-${mappingId}`;
+            
+            const rangeSelect = document.createElement('select');
+            rangeSelect.id = `range-col-select-${mappingId}`;
+            updateDropdown(`range-col-select-${mappingId}`, masterColumns);
+            rangeLabel.appendChild(rangeSelect);
+            
+            // Transaction column dropdown
+            const transactionSelect = document.createElement('select');
+            transactionSelect.id = `transaction-col-${mappingId}`;
+            updateDropdown(`transaction-col-${mappingId}`, transactionColumns);
+            
+            // Remove button
+            const removeBtn = document.createElement('button');
+            removeBtn.textContent = 'Remove';
+            removeBtn.onclick = function() {
+                container.removeChild(row);
+            };
+            
+            // Append all elements
+            row.appendChild(masterSelect);
+            row.appendChild(document.createTextNode(' → '));
+            row.appendChild(transactionSelect);
+            row.appendChild(document.createTextNode(' '));
+            row.appendChild(rangeCheck);
+            row.appendChild(document.createTextNode('Range'));
+            row.appendChild(rangeLabel);
+            row.appendChild(removeBtn);
+            
+            container.appendChild(row);
+        }
+        
+        function saveConfig() {
+            const primaryKey = document.getElementById('primary_key').value;
+            const endKey = document.getElementById('end_key').value;
+            
+            if (!primaryKey || !endKey) {
+                showStatus('Primary Key and End Key are required', 'error');
+                return;
+            }
+            
+            const mappings = [];
+            const mappingRows = document.getElementById('mappings-container').children;
+            
+            for (let i = 0; i < mappingRows.length; i++) {
+                const row = mappingRows[i];
+                const id = row.id.split('-')[1];
+                
+                const masterCol = document.getElementById(`master-col-${id}`).value;
+                const transactionCol = document.getElementById(`transaction-col-${id}`).value;
+                const isRange = document.getElementById(`is-range-${id}`).checked;
+                
+                const mapping = {
+                    master_column: masterCol,
+                    transaction_column: transactionCol,
+                    is_range: isRange
+                };
+                
+                if (isRange) {
+                    mapping.range_column = document.getElementById(`range-col-select-${id}`).value;
+                }
+                
+                mappings.push(mapping);
+            }
+            
+            const config = {
+                primary_key: primaryKey,
+                end_key: endKey,
+                sheet_selection: document.getElementById('sheet_selection').value,
+                mappings: mappings
+            };
+            
+            fetch('/config', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(config)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showStatus(data.error, 'error');
+                } else {
+                    showStatus('Configuration saved successfully', 'success');
+                }
+            })
+            .catch(error => {
+                showStatus('Error saving configuration: ' + error, 'error');
+            });
+        }
+        
+        function uploadConfig() {
+            const configFile = document.getElementById('config_file').files[0];
+            
+            if (!configFile) {
+                showStatus('Please select a config file', 'error');
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', configFile);
+            
+            fetch('/config', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showStatus(data.error, 'error');
+                    return;
+                }
+                
+                // Update UI with the loaded config
+                document.getElementById('primary_key').value = data.config.primary_key;
+                document.getElementById('end_key').value = data.config.end_key;
+                document.getElementById('sheet_selection').value = data.config.sheet_selection;
+                
+                // Clear existing mappings
+                document.getElementById('mappings-container').innerHTML = '';
+                
+                // Add new mappings from config
+                data.config.mappings.forEach(mapping => {
+                    addMapping();
+                    const lastRow = document.getElementById('mappings-container').lastChild;
+                    const id = lastRow.id.split('-')[1];
+                    
+                    document.getElementById(`master-col-${id}`).value = mapping.master_column;
+                    document.getElementById(`transaction-col-${id}`).value = mapping.transaction_column;
+                    document.getElementById(`is-range-${id}`).checked = mapping.is_range;
+                    
+                    if (mapping.is_range) {
+                        document.getElementById(`range-col-select-${id}`).value = mapping.range_column;
+                        document.getElementById(`range-col-${id}`).style.display = 'block';
+                    }
+                });
+                
+                showStatus('Configuration loaded successfully', 'success');
+            })
+            .catch(error => {
+                showStatus('Error loading configuration: ' + error, 'error');
+            });
+        }
+        
+        function downloadConfig() {
+            fetch('/download_config')
+            .then(response => response.blob())
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'mapping_config.json';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+            })
+            .catch(error => {
+                showStatus('Error downloading configuration: ' + error, 'error');
+            });
+        }
+        
+        function processFiles() {
+            const statusDiv = document.getElementById('process-status');
+            statusDiv.className = 'status';
+            statusDiv.textContent = 'Processing files...';
+            
+            fetch('/process', {
+                method: 'POST'
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.error || 'Error processing files');
+                    });
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'enhanced_transaction.xlsx';
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+                
+                statusDiv.className = 'status success';
+                statusDiv.textContent = 'Processing complete! File downloaded.';
+            })
+            .catch(error => {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = error.message;
+            });
+        }
+        
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status-message');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            
+            setTimeout(() => {
+                statusDiv.textContent = '';
+                statusDiv.className = 'status';
+            }, 5000);
+        }
+    </script>
 </body>
 </html>
-"""
+'''
 
-@app.route("/", methods=["GET"])
-def index():
-    return render_template_string(TEMPLATE)
-
-@app.route("/upload", methods=["POST"])
-def upload():
-    mf = request.files.get("master_file")
-    tf = request.files.get("transaction_file")
-    if mf:
-        data_store['master'] = pd.read_excel(mf, sheet_name=None)
-        data_store['master_sheets'] = list(data_store['master'].keys())
-    if tf:
-        data_store['transaction'] = pd.read_excel(tf, sheet_name=None)
-        data_store['transaction_sheets'] = list(data_store['transaction'].keys())
-    return render_template_string(TEMPLATE, master_sheets=data_store['master_sheets'], transaction_sheets=data_store['transaction_sheets'])
-
-@app.route("/configure", methods=["POST"])
-def configure():
-    ms = request.form["master_sheet"]
-    ts = request.form["transaction_sheet"]
-    df_m = data_store['master'][ms]
-    df_t = data_store['transaction'][ts]
-    data_store['df_m'] = df_m
-    data_store['df_t'] = df_t
-    common_cols = list(set(df_m.columns).intersection(df_t.columns))
-    return render_template_string(TEMPLATE, columns=common_cols, master_sheets=data_store['master_sheets'], transaction_sheets=data_store['transaction_sheets'])
-
-@app.route("/export_config", methods=["POST"])
-def export_config():
-    cfg = data_store.get('config', {})
-    buffer = io.BytesIO()
-    buffer.write(json.dumps(cfg).encode())
-    buffer.seek(0)
-    return send_file(buffer, as_attachment=True, download_name="mapping_config.json", mimetype="application/json")
-
-@app.route("/import_config", methods=["POST"])
-def import_config():
-    file = request.files.get("config_file")
-    if file:
-        cfg = json.loads(file.read())
-        data_store['config'] = cfg
-    return redirect("/")
-
-def calculate_probability(row_t, df_m, mapping, match_type):
-    scores = []
-    for _, row_m in df_m.iterrows():
-        score, matched, failed = 0, [], []
-        for t_col, m_col in mapping.items():
-            if match_type[t_col] == 'direct':
-                if row_t[t_col] == row_m[m_col]:
-                    score += 1
-                    matched.append(t_col)
-                else:
-                    failed.append(t_col)
-            elif match_type[t_col] == 'range':
-                val = row_t[t_col]
-                min_val = row_m.get(m_col + "_min", 0)
-                max_val = row_m.get(m_col + "_max", 0)
-                if min_val <= val <= max_val:
-                    score += 1
-                    matched.append(t_col)
-                else:
-                    failed.append(t_col)
-        prob = round(100 * score / len(mapping), 2)
-        scores.append((row_m[data_store['primary_key']], prob, matched, failed))
-    top3 = sorted(scores, key=lambda x: x[1], reverse=True)[:3]
-    return top3
-
-@app.route("/analyze", methods=["POST"])
-def analyze():
-    df_t = data_store['df_t']
-    df_m = data_store['df_m']
-    primary_key = request.form.get("primary_key")
-    data_store['primary_key'] = primary_key
-    mapping, match_type = {}, {}
-
-    for col in df_t.columns:
-        m_val = request.form.get(f"map_master_{col}")
-        t_val = col
-        if m_val:
-            mapping[t_val] = m_val
-            match_type[t_val] = request.form.get(f"match_type_{col}")
-
-    data_store['config'] = {'mapping': mapping, 'match_type': match_type, 'primary_key': primary_key}
-    results = []
-
-    for _, row in df_t.iterrows():
-        top_matches = calculate_probability(row, df_m, mapping, match_type)
-        results.append({
-            'id': row[primary_key],
-            'matches': [m[0] for m in top_matches],
-            'probs': [m[1] for m in top_matches],
-            'reason': ["Matched: " + ", ".join(m[2]) + " | Failed: " + ", ".join(m[3]) for m in top_matches][0]
-        })
-
-    data_store['final'] = pd.DataFrame(results)
-    return render_template_string(TEMPLATE, result=results, columns=list(df_t.columns))
-
-@app.route("/download", methods=["GET"])
-def download():
-    df = data_store.get('final')
-    buffer = io.BytesIO()
-    df.to_excel(buffer, index=False)
-    buffer.seek(0)
-    return send_file(buffer, as_attachment=True, download_name="match_results.xlsx", mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     app.run(debug=True)
