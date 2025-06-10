@@ -1,0 +1,187 @@
+from flask import Flask, render_template_string, request, jsonify
+import pandas as pd
+import numpy as np
+import json
+from werkzeug.utils import secure_filename
+
+app = Flask(__name__)
+data_store = {}
+
+HTML_TEMPLATE = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Match Finder</title>
+    <style>
+        body { font-family: sans-serif; background: #f0f0f0; padding: 20px; }
+        h2 { color: #333; }
+        input, select, button { margin: 8px 4px; padding: 6px; }
+        .config-section { background: #fff; padding: 20px; margin-top: 20px; border-radius: 8px; }
+        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 8px; }
+    </style>
+</head>
+<body>
+<h2>🔍 Match Finder App - Upload & Configure</h2>
+<form id="uploadForm" enctype="multipart/form-data">
+    <label>Master File:</label><input type="file" name="master" required>
+    <label>Transaction File:</label><input type="file" name="transaction" required>
+    <button type="submit">Upload</button>
+</form>
+
+<div id="sheetSelect" style="display:none" class="config-section">
+    <h3>Select Sheets</h3>
+    <label>Master Sheet:</label>
+    <select id="masterSheet"></select>
+    <label>Transaction Sheet:</label>
+    <select id="transactionSheet"></select>
+    <button onclick="loadColumns()">Next</button>
+</div>
+
+<div id="mapping" style="display:none" class="config-section">
+    <h3>Column Mapping</h3>
+    <div id="mappingContainer"></div>
+    <button onclick="runAnalysis()">Analyze</button>
+</div>
+
+<div id="result" class="config-section"></div>
+
+<script>
+let mappingConfig = [];
+
+document.getElementById("uploadForm").onsubmit = async (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const res = await fetch('/upload', { method: 'POST', body: formData });
+    const data = await res.json();
+    let ms = document.getElementById("masterSheet");
+    let ts = document.getElementById("transactionSheet");
+    ms.innerHTML = data.master_sheets.map(s => `<option>${s}</option>`).join('');
+    ts.innerHTML = data.transaction_sheets.map(s => `<option>${s}</option>`).join('');
+    document.getElementById("sheetSelect").style.display = "block";
+};
+
+async function loadColumns() {
+    const res = await fetch('/columns', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            master_sheet: masterSheet.value,
+            transaction_sheet: transactionSheet.value
+        })
+    });
+    const data = await res.json();
+    let html = '';
+    data.master_columns.forEach(m => {
+        data.transaction_columns.forEach(t => {
+            html += `<div>Master: ${m} → Transaction: ${t}
+                <select data-master="${m}" data-transaction="${t}">
+                    <option value="">Ignore</option>
+                    <option value="direct">Direct</option>
+                    <option value="range">Range</option>
+                </select></div>`;
+        });
+    });
+    document.getElementById("mappingContainer").innerHTML = html;
+    document.getElementById("mapping").style.display = "block";
+}
+
+async function runAnalysis() {
+    mappingConfig = [];
+    document.querySelectorAll('#mappingContainer select').forEach(sel => {
+        if (sel.value)
+            mappingConfig.push({
+                master: sel.dataset.master,
+                transaction: sel.dataset.transaction,
+                type: sel.value
+            });
+    });
+    const res = await fetch('/analyze', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+            config: mappingConfig,
+            master_sheet: masterSheet.value,
+            transaction_sheet: transactionSheet.value
+        })
+    });
+    const data = await res.json();
+    let html = `<h3>Results</h3><table><tr><th>ID</th><th>Top Matches</th><th>Probabilities</th><th>Comments</th></tr>`;
+    data.forEach(r => {
+        html += `<tr><td>${r.id}</td>
+            <td>${r.top_matches.join(', ')}</td>
+            <td>${r.probabilities.join(', ')}</td>
+            <td>${r.comments.join(' | ')}</td></tr>`;
+    });
+    html += '</table>';
+    document.getElementById("result").innerHTML = html;
+}
+</script>
+</body>
+</html>
+'''
+
+@app.route('/')
+def index():
+    return render_template_string(HTML_TEMPLATE)
+
+@app.route('/upload', methods=['POST'])
+def upload():
+    master = pd.read_excel(request.files['master'], sheet_name=None)
+    trans = pd.read_excel(request.files['transaction'], sheet_name=None)
+    data_store['master'] = master
+    data_store['transaction'] = trans
+    return jsonify({
+        'master_sheets': list(master.keys()),
+        'transaction_sheets': list(trans.keys())
+    })
+
+@app.route('/columns', methods=['POST'])
+def columns():
+    req = request.json
+    mcols = data_store['master'][req['master_sheet']].columns.tolist()
+    tcols = data_store['transaction'][req['transaction_sheet']].columns.tolist()
+    return jsonify({'master_columns': mcols, 'transaction_columns': tcols})
+
+@app.route('/analyze', methods=['POST'])
+def analyze():
+    config = request.json['config']
+    m_sheet = request.json['master_sheet']
+    t_sheet = request.json['transaction_sheet']
+    mdf = data_store['master'][m_sheet]
+    tdf = data_store['transaction'][t_sheet]
+    results = []
+
+    for idx, t_row in tdf.iterrows():
+        scores = []
+        for midx, m_row in mdf.iterrows():
+            match_score = 0
+            reasons = []
+            for rule in config:
+                mcol, tcol, typ = rule['master'], rule['transaction'], rule['type']
+                tval = t_row[tcol]
+                if typ == 'direct':
+                    if str(tval).strip().lower() == str(m_row[mcol]).strip().lower():
+                        match_score += 1
+                    else:
+                        reasons.append(f"{tcol} mismatch")
+                elif typ == 'range':
+                    min_col = f"{mcol}_min" if f"{mcol}_min" in m_row else mcol
+                    max_col = f"{mcol}_max" if f"{mcol}_max" in m_row else mcol
+                    if m_row[min_col] <= tval <= m_row[max_col]:
+                        match_score += 1
+                    else:
+                        reasons.append(f"{tcol} out of range")
+            prob = match_score / len(config)
+            scores.append((f"Rule_{midx}", round(prob*100, 2), reasons))
+        scores = sorted(scores, key=lambda x: x[1], reverse=True)[:3]
+        results.append({
+            'id': idx,
+            'top_matches': [s[0] for s in scores],
+            'probabilities': [f"{s[1]}%" for s in scores],
+            'comments': [", ".join(s[2]) for s in scores]
+        })
+    return jsonify(results)
+
+if __name__ == "__main__":
+    app.run(debug=True)
