@@ -1,0 +1,243 @@
+from flask import Flask, request, render_template_string, send_file, redirect
+import pandas as pd
+import io
+import json
+import itertools
+from werkzeug.utils import secure_filename
+
+app = Flask(__name__)
+
+# In-memory storage
+data_store = {
+    'master': None,
+    'transaction': None,
+    'master_sheets': [],
+    'transaction_sheets': [],
+    'config': {}
+}
+
+TEMPLATE = """
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Excel Matcher</title>
+    <style>
+        body { font-family: Arial; background: #f4f4f4; margin: 40px; }
+        .container { background: white; padding: 20px; border-radius: 8px; }
+        input[type=file], select, button { margin: 10px 0; padding: 8px; width: 100%; }
+        table, th, td { border: 1px solid #aaa; border-collapse: collapse; padding: 6px; }
+        th { background-color: #eee; }
+        .section { margin-top: 30px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Excel Match Analyzer</h2>
+
+        <form method="post" action="/upload" enctype="multipart/form-data">
+            <label>Upload Master File:</label>
+            <input type="file" name="master_file">
+            <label>Upload Transaction File:</label>
+            <input type="file" name="transaction_file">
+            <button type="submit">Upload Files</button>
+        </form>
+
+        {% if master_sheets %}
+        <div class="section">
+            <form method="post" action="/configure">
+                <label>Select Master Sheet:</label>
+                <select name="master_sheet">
+                    {% for sheet in master_sheets %}
+                        <option value="{{sheet}}">{{sheet}}</option>
+                    {% endfor %}
+                </select>
+
+                <label>Select Transaction Sheet:</label>
+                <select name="transaction_sheet">
+                    {% for sheet in transaction_sheets %}
+                        <option value="{{sheet}}">{{sheet}}</option>
+                    {% endfor %}
+                </select>
+                <button type="submit">Load Columns</button>
+            </form>
+        </div>
+        {% endif %}
+
+        {% if columns %}
+        <div class="section">
+            <form method="post" action="/analyze">
+                <label>Primary Key (Must match in both files):</label>
+                <select name="primary_key">
+                    {% for col in columns %}
+                        <option value="{{col}}">{{col}}</option>
+                    {% endfor %}
+                </select>
+
+                <h4>Column Mapping:</h4>
+                {% for col in columns %}
+                    <div>
+                        <label>{{col}}:</label>
+                        <select name="map_master_{{col}}">
+                            <option value="">--Master Column--</option>
+                            {% for mc in columns %}
+                                <option value="{{mc}}">{{mc}}</option>
+                            {% endfor %}
+                        </select>
+                        <select name="match_type_{{col}}">
+                            <option value="direct">Direct</option>
+                            <option value="range">Range</option>
+                        </select>
+                    </div>
+                {% endfor %}
+
+                <button type="submit">Analyze</button>
+            </form>
+
+            <form method="post" action="/export_config">
+                <button type="submit">Export Config</button>
+            </form>
+
+            <form method="post" action="/import_config" enctype="multipart/form-data">
+                <input type="file" name="config_file">
+                <button type="submit">Import Config</button>
+            </form>
+        </div>
+        {% endif %}
+
+        {% if result %}
+        <div class="section">
+            <h3>Top Matches</h3>
+            <table>
+                <tr>
+                    <th>Transaction ID</th>
+                    <th>Top 3 Matches (Master IDs)</th>
+                    <th>Probabilities (%)</th>
+                    <th>Reason</th>
+                </tr>
+                {% for row in result %}
+                <tr>
+                    <td>{{row['id']}}</td>
+                    <td>{{row['matches']}}</td>
+                    <td>{{row['probs']}}</td>
+                    <td>{{row['reason']}}</td>
+                </tr>
+                {% endfor %}
+            </table>
+            <form method="get" action="/download">
+                <button type="submit">Download Result</button>
+            </form>
+        </div>
+        {% endif %}
+    </div>
+</body>
+</html>
+"""
+
+@app.route("/", methods=["GET"])
+def index():
+    return render_template_string(TEMPLATE)
+
+@app.route("/upload", methods=["POST"])
+def upload():
+    mf = request.files.get("master_file")
+    tf = request.files.get("transaction_file")
+    if mf:
+        data_store['master'] = pd.read_excel(mf, sheet_name=None)
+        data_store['master_sheets'] = list(data_store['master'].keys())
+    if tf:
+        data_store['transaction'] = pd.read_excel(tf, sheet_name=None)
+        data_store['transaction_sheets'] = list(data_store['transaction'].keys())
+    return render_template_string(TEMPLATE, master_sheets=data_store['master_sheets'], transaction_sheets=data_store['transaction_sheets'])
+
+@app.route("/configure", methods=["POST"])
+def configure():
+    ms = request.form["master_sheet"]
+    ts = request.form["transaction_sheet"]
+    df_m = data_store['master'][ms]
+    df_t = data_store['transaction'][ts]
+    data_store['df_m'] = df_m
+    data_store['df_t'] = df_t
+    common_cols = list(set(df_m.columns).intersection(df_t.columns))
+    return render_template_string(TEMPLATE, columns=common_cols, master_sheets=data_store['master_sheets'], transaction_sheets=data_store['transaction_sheets'])
+
+@app.route("/export_config", methods=["POST"])
+def export_config():
+    cfg = data_store.get('config', {})
+    buffer = io.BytesIO()
+    buffer.write(json.dumps(cfg).encode())
+    buffer.seek(0)
+    return send_file(buffer, as_attachment=True, download_name="mapping_config.json", mimetype="application/json")
+
+@app.route("/import_config", methods=["POST"])
+def import_config():
+    file = request.files.get("config_file")
+    if file:
+        cfg = json.loads(file.read())
+        data_store['config'] = cfg
+    return redirect("/")
+
+def calculate_probability(row_t, df_m, mapping, match_type):
+    scores = []
+    for _, row_m in df_m.iterrows():
+        score, matched, failed = 0, [], []
+        for t_col, m_col in mapping.items():
+            if match_type[t_col] == 'direct':
+                if row_t[t_col] == row_m[m_col]:
+                    score += 1
+                    matched.append(t_col)
+                else:
+                    failed.append(t_col)
+            elif match_type[t_col] == 'range':
+                val = row_t[t_col]
+                min_val = row_m.get(m_col + "_min", 0)
+                max_val = row_m.get(m_col + "_max", 0)
+                if min_val <= val <= max_val:
+                    score += 1
+                    matched.append(t_col)
+                else:
+                    failed.append(t_col)
+        prob = round(100 * score / len(mapping), 2)
+        scores.append((row_m[data_store['primary_key']], prob, matched, failed))
+    top3 = sorted(scores, key=lambda x: x[1], reverse=True)[:3]
+    return top3
+
+@app.route("/analyze", methods=["POST"])
+def analyze():
+    df_t = data_store['df_t']
+    df_m = data_store['df_m']
+    primary_key = request.form.get("primary_key")
+    data_store['primary_key'] = primary_key
+    mapping, match_type = {}, {}
+
+    for col in df_t.columns:
+        m_val = request.form.get(f"map_master_{col}")
+        t_val = col
+        if m_val:
+            mapping[t_val] = m_val
+            match_type[t_val] = request.form.get(f"match_type_{col}")
+
+    data_store['config'] = {'mapping': mapping, 'match_type': match_type, 'primary_key': primary_key}
+    results = []
+
+    for _, row in df_t.iterrows():
+        top_matches = calculate_probability(row, df_m, mapping, match_type)
+        results.append({
+            'id': row[primary_key],
+            'matches': [m[0] for m in top_matches],
+            'probs': [m[1] for m in top_matches],
+            'reason': ["Matched: " + ", ".join(m[2]) + " | Failed: " + ", ".join(m[3]) for m in top_matches][0]
+        })
+
+    data_store['final'] = pd.DataFrame(results)
+    return render_template_string(TEMPLATE, result=results, columns=list(df_t.columns))
+
+@app.route("/download", methods=["GET"])
+def download():
+    df = data_store.get('final')
+    buffer = io.BytesIO()
+    df.to_excel(buffer, index=False)
+    buffer.seek(0)
+    return send_file(buffer, as_attachment=True, download_name="match_results.xlsx", mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+if __name__ == "__main__":
+    app.run(debug=True)
