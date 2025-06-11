@@ -1,9 +1,6 @@
 from flask import Flask, request, render_template_string, send_file
-import pandas as pd, numpy as np, math
-from collections import defaultdict
-from datetime import datetime
-import json, io
-import plotly.express as px
+import pandas as pd, numpy as np
+import json
 
 app = Flask(__name__)
 OUTPUT = "enhanced_output.xlsx"
@@ -13,14 +10,20 @@ HTML = """<!doctype html>
 <head>
   <title>BayesMatch</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style> body { background: #121212; color: #eee; } .table td,.table th { color: #ddd; } </style>
+  <style>
+    body { background: #121212; color: #eee; }
+    .table td, .table th { color: #ccc; }
+    .score-cell { text-align:center; font-weight:bold; }
+    .score-heat { background-color: rgba(0, 255, 0, VAR); }
+    .score-low  { background-color: rgba(255, 0, 0, VAR); }
+  </style>
 </head>
 <body>
 <div class="container py-4">
   <h1 class="mb-4">BayesMatch</h1>
   <ul class="nav nav-tabs mb-4" id="tabs">
     <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-upload">Upload</a></li>
-    {% if result is defined %} 
+    {% if result is defined %}
       <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-results">Results</a></li>
       <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-heatmap">Heatmap</a></li>
     {% endif %}
@@ -29,29 +32,37 @@ HTML = """<!doctype html>
   <div class="tab-content">
     <div class="tab-pane fade show active" id="tab-upload">
       <form method="POST" action="/predict" enctype="multipart/form-data">
-        <div class="mb-3">
-          <label>Master File:</label><br><input type="file" name="master" required>
-        </div>
-        <div class="mb-3">
-          <label>Transaction File:</label><br><input type="file" name="transaction" required>
-        </div>
-        <div class="mb-3">
-          <label>Optional Config (JSON/Excel):</label><br><input type="file" name="config">
-        </div>
+        <div class="mb-3"><label>Master File:</label><input type="file" name="master" required></div>
+        <div class="mb-3"><label>Transaction File:</label><input type="file" name="transaction" required></div>
+        <div class="mb-3"><label>Optional Config File (JSON/Excel):</label><input type="file" name="config"></div>
         <button class="btn btn-success">Run Prediction</button>
       </form>
     </div>
 
     {% if result is defined %}
     <div class="tab-pane fade" id="tab-results">
-      <a href="/download" class="btn btn-primary mb-3">📥 Download Full Output</a>
+      <a href="/download" class="btn btn-primary mb-3">📥 Download Output</a>
       <div class="table-responsive">
         {{ result.to_html(classes="table table-striped table-dark", index=False) | safe }}
       </div>
     </div>
+
     <div class="tab-pane fade" id="tab-heatmap">
+      <h4>Matching Score Heatmap (Top 3)</h4>
       <div class="table-responsive">
-        {{ heatmap_html | safe }}
+        <table class="table table-bordered table-dark">
+          <thead><tr><th>Transaction #</th>{% for m in masters %}<th>{{ m }}</th>{% endfor %}</tr></thead>
+          <tbody>
+            {% for row in heatmap %}
+              <tr><td>Txn {{ loop.index }}</td>
+              {% for score in row %}
+                {% set var = "%.2f" | format(score/3) %}
+                <td class="score-cell score-heat" style="background-color: rgba(0, 255, 0, {{ var }});">{{ score }}</td>
+              {% endfor %}
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
       </div>
     </div>
     {% endif %}
@@ -63,81 +74,78 @@ HTML = """<!doctype html>
 
 def read_data(f):
     ext = f.filename.split('.')[-1].lower()
-    if ext in ('xls','xlsx'): return pd.read_excel(f)
-    if ext=='csv': return pd.read_csv(f)
-    if ext=='json': return json.load(f)
+    if ext in ('xls', 'xlsx'):
+        return pd.read_excel(f)
+    elif ext == 'csv':
+        return pd.read_csv(f)
+    elif ext == 'json':
+        return json.load(f)
     return None
 
-def compute_scores(master, row, attr_cols, range_cols):
+def compute_scores(master, row, attrs, range_cols):
     scores = []
     for _, m in master.iterrows():
-        sc = 0
-        for a in attr_cols:
-            if a in row:
-                sc += (1 if str(row[a]).strip().lower()==str(m[a]).strip().lower() else 0)
-        for base, (mn, mx) in range_cols.items():
-            val = row.get(base)
-            if pd.notna(val) and mn<=float(val)<=mx:
-                sc += 1
-        scores.append(sc)
+        score = 0
+        for attr in attrs:
+            if attr in row and pd.notna(row[attr]) and pd.notna(m[attr]):
+                if str(row[attr]).strip().lower() == str(m[attr]).strip().lower():
+                    score += 1
+        for r in range_cols:
+            minv = m[r + '_Min']
+            maxv = m[r + '_Max']
+            val = row.get(r)
+            if pd.notna(val) and pd.notna(minv) and pd.notna(maxv):
+                if float(minv) <= float(val) <= float(maxv):
+                    score += 1
+        scores.append(score)
     return scores
 
 @app.route("/", methods=["GET"])
-def home():
+def index():
     return render_template_string(HTML)
 
 @app.route("/predict", methods=["POST"])
 def predict():
     master = read_data(request.files['master'])
     trans = read_data(request.files['transaction'])
-    cfgf = request.files.get('config')
     cfg = None
-    if cfgf:
-        cfg = read_data(cfgf)
+    cfg_file = request.files.get("config")
+    if cfg_file:
+        cfg = read_data(cfg_file)
 
-    end_col = 'EndKey'
-    attr_cols = [c for c in master.columns if c!=end_col and not c.endswith(('_Min','_Max'))]
-    range_attrs = {}
-    for c in master.columns:
-        if c.endswith('_Min'):
-            base = c[:-4]
-            if base+'_Max' in master.columns:
-                range_attrs[base] = (master[c].min(), master[base+'_Max'].max())
+    end_col = "EndKey"
+    attr_cols = [c for c in master.columns if c != end_col and not c.endswith(('_Min', '_Max'))]
+    range_cols = [c[:-4] for c in master.columns if c.endswith('_Min') and c[:-4] + '_Max' in master.columns]
+
     if cfg:
         if isinstance(cfg, dict):
             end_col = cfg.get("EndKey", end_col)
             attr_cols = cfg.get("Attributes", attr_cols)
         else:
-            row=cfg.iloc[0]
-            end_col=row.EndKey; attr_cols=[x.strip() for x in row.Attributes.split(",")]
+            row = cfg.iloc[0]
+            end_col = row.EndKey
+            attr_cols = [a.strip() for a in row.Attributes.split(',')]
 
-    preds, heat = [], []
-    for idx, t in trans.iterrows():
-        scores = compute_scores(master, t, attr_cols, range_attrs)
-        top_idxs = np.argsort(scores)[::-1][:3]
-        topvals = [(master.iloc[i][end_col], scores[i]) for i in top_idxs]
-        total = sum(scores) or 1
+    preds, heatmap = [], []
+    for _, t in trans.iterrows():
+        scores = compute_scores(master, t, attr_cols, range_cols)
+        top3_idx = np.argsort(scores)[::-1][:3]
+        top3 = [(master.iloc[i][end_col], scores[i]) for i in top3_idx]
         preds.append({
-            end_col: topvals[0][0],
-            'Top3': ','.join(f"{k}:{v/total:.2f}" for k,v in topvals)
+            end_col: top3[0][0],
+            "Top3": ', '.join(f"{k}:{v}" for k, v in top3)
         })
-        # build heatmap row
-        heat.append([round(v/total,2) for v in scores[:3]])
+        heatmap.append([s for _, s in top3])
 
-    res = pd.concat([trans.reset_index(drop=True), pd.DataFrame(preds)], axis=1)
-    res.to_excel(OUTPUT, index=False)
+    result = pd.concat([trans.reset_index(drop=True), pd.DataFrame(preds)], axis=1)
+    result.to_excel(OUTPUT, index=False)
 
-    # Inline heatmap with Plotly
-    fig = px.imshow(heat, color_continuous_scale='RdYlGn', aspect='auto',
-                    x=[f"Master#{i+1}" for i,_ in enumerate(heat[0])],
-                    y=[f"Trans#{i+1}" for i in range(len(heat))])
-    heatmap_html = fig.to_html(full_html=False, include_plotlyjs='cdn')
-
-    return render_template_string(HTML, result=res, heatmap_html=heatmap_html)
+    return render_template_string(HTML, result=result, heatmap=heatmap,
+                                  masters=[f"Match {i+1}" for i in range(3)])
 
 @app.route("/download")
-def dl():
+def download():
     return send_file(OUTPUT, as_attachment=True)
 
-if __name__=="__main__":
+if __name__ == "__main__":
     app.run(debug=True)
