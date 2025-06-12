@@ -2,51 +2,33 @@ def parent_child(self):
     self.logger.info("Starting parent_child...")
 
     try:
-        # Define hierarchy levels from Table B
-        levels = ['niv1', 'niv2', 'niv3', 'niv4', 'niv5', 'niv6']
+        # 🔁 Build code → level mapping from Table B (self.SubProduct)
+        code_to_level = {}
 
-        # Build index mapping of each code to its row index in SubProduct
-        code_index_map = {
-            str(code).strip(): idx for idx, code in enumerate(self.SubProduct['code']) if pd.notna(code)
-        }
+        for i in range(1, 7):
+            col_name = f'niv{i}'
+            if col_name in self.SubProduct.columns:
+                for code in self.SubProduct[col_name]:
+                    if pd.notna(code):
+                        code_to_level[str(code).strip()] = i
 
-        # Get values of all levels
-        level_values = self.SubProduct[levels].values
-
+        # 🧠 Define the parent-child checker
         def check_parent_child(row):
-            descendant = str(row['SubProductIAS']).strip()
-            ancestor = str(row['Type of operation']).strip()
+            code1 = str(row['SubProductIAS']).strip()  # child
+            code2 = str(row['Type of operation']).strip()  # parent
 
-            # If descendant not in SubProduct codes, return False
-            if descendant not in code_index_map:
-                return False
+            level1 = code_to_level.get(code1)
+            level2 = code_to_level.get(code2)
 
-            # Get row index for descendant in SubProduct
-            desc_idx = code_index_map[descendant]
-            lvl_idx = -1
-
-            # Determine the level index of the descendant (niv1 to niv6)
-            for i in range(len(levels)):
-                if pd.notna(level_values[desc_idx][i]) and str(level_values[desc_idx][i]).strip() == descendant:
-                    lvl_idx = i
-                    break
-
-            # If level not found, return False
-            if lvl_idx == -1:
-                return False
-
-            # Check upward for ancestor in previous levels (niv1 to niv(lvl_idx - 1))
-            for parent_level_idx in range(lvl_idx - 1, -1, -1):
-                parent_code = level_values[desc_idx][parent_level_idx]
-                if pd.notna(parent_code) and str(parent_code).strip() == ancestor:
-                    return True
-
+            # ✅ Code1 is child of Code2 if level1 > level2
+            if level1 and level2 and level1 > level2:
+                return True
             return False
 
-        # Copy and process self.result3
+        # 🧪 Apply logic to full table
         self.result3['parent_match'] = self.result3.apply(check_parent_child, axis=1)
 
-        # Split ABC (child of) and XYZ (not child of)
+        # ✂️ Split into ABC and XYZ
         self.result3A = self.result3[self.result3['parent_match']]
         self.result3B = self.result3[~self.result3['parent_match']]
 
