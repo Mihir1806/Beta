@@ -1,39 +1,44 @@
 def parent_child(self):
-    self.logger.info("Starting parent_child...")
+    self.logger.info("~ Starting parent_child...")
 
     try:
-        # 🔁 Build code → level mapping from Table B (self.SubProduct)
+        # ✅ Step 1: Build code → level map from 'Niv 1' to 'Niv 6'
         code_to_level = {}
 
-        for i in range(1, 7):
-            col_name = f'niv{i}'
-            if col_name in self.SubProduct.columns:
-                for code in self.SubProduct[col_name]:
-                    if pd.notna(code):
-                        code_to_level[str(code).strip()] = i
+        niv_columns = ['Niv 1', 'Niv 2', 'Niv 3', 'Niv 4', 'Niv 5', 'Niv 6']
 
-        # 🧠 Define the parent-child checker
+        for level, col in enumerate(niv_columns, start=1):
+            if col in self.SubProduct.columns:
+                for val in self.SubProduct[col]:
+                    if pd.notna(val):
+                        code = str(val).strip()
+                        code_to_level[code] = level
+
+        self.logger.info(f"~ Loaded hierarchy from Niv 1 to Niv 6 with {len(code_to_level)} codes")
+
+        # ✅ Step 2: Logic to check if Code1 is child of Code2
         def check_parent_child(row):
-            code1 = str(row['SubProductIAS']).strip()  # child
-            code2 = str(row['Type of operation']).strip()  # parent
+            code1 = str(row['SubProductIAS']).strip()
+            code2 = str(row['Type of operation']).strip()
 
             level1 = code_to_level.get(code1)
             level2 = code_to_level.get(code2)
 
-            # ✅ Code1 is child of Code2 if level1 > level2
-            if level1 and level2 and level1 > level2:
-                return True
-            return False
+            if level1 is None or level2 is None:
+                return False
 
-        # 🧪 Apply logic to full table
+            return level1 > level2  # Code1 is child of Code2
+
+        # ✅ Step 3: Apply check on each row
         self.result3['parent_match'] = self.result3.apply(check_parent_child, axis=1)
 
-        # ✂️ Split into ABC and XYZ
-        self.result3A = self.result3[self.result3['parent_match']]
-        self.result3B = self.result3[~self.result3['parent_match']]
+        # ✅ Step 4: Split into ABC and XYZ
+        self.result3A = self.result3[self.result3['parent_match']].copy()
+        self.result3B = self.result3[~self.result3['parent_match']].copy()
 
-        self.logger.info("parent_child completed successfully.")
+        self.logger.info(f"~ Matches (ABC): {len(self.result3A)} | Non-matches (XYZ): {len(self.result3B)}")
+        self.logger.info("~ parent_child completed successfully.")
 
     except Exception as e:
-        self.logger.error(f"Error in parent_child: {e}")
+        self.logger.error(f"~ Error in parent_child: {e}")
         raise
