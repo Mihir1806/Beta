@@ -1,32 +1,23 @@
 def parent_child(self):
-    try:
-        # 🔁 Step 1: Build Code → Level mapping from SubProduct table
-        code_to_level = {}
-        niv_columns = [f'Niv {i}' for i in range(1, 7)]
+    # Step 1: Build code_to_level mapping from SubProduct table
+    code_to_level = {}
+    for i in range(1, 7):  # Niv 1 to Niv 6
+        niv_col = f'Niv {i}'
+        if niv_col in self.SubProduct.columns:
+            for idx, val in self.SubProduct[niv_col].items():
+                code = self.SubProduct.at[idx, 'Code']
+                if pd.notna(code) and pd.notna(val):
+                    code_to_level[str(code).strip()] = i
 
-        for _, row in self.SubProduct.iterrows():
-            code = str(row['Code']).strip()
-            for i, niv in enumerate(niv_columns, start=1):
-                if pd.notna(row[niv]) and code not in code_to_level:
-                    code_to_level[code] = i
-                    break  # Stop at first non-empty Niv
+    # Step 2: Define a helper function to check parent-child relationship
+    def is_child(row):
+        code1 = str(row['SubProductIAS']).strip()
+        code2 = str(row['Type of operation']).strip()
+        level1 = code_to_level.get(code1)
+        level2 = code_to_level.get(code2)
+        return level1 is not None and level2 is not None and level1 > level2
 
-        # 🔍 Step 2: Define function to check if Code1 is a child of Code2
-        def check_parent_child(row):
-            code1 = str(row['SubProductIAS']).strip()
-            code2 = str(row['Type of operation']).strip()
-            level1 = code_to_level.get(code1)
-            level2 = code_to_level.get(code2)
-            return level1 is not None and level2 is not None and level1 > level2
-
-        # ⚙️ Step 3: Apply the logic
-        self.result3['parent_match'] = self.result3.apply(check_parent_child, axis=1)
-
-        # 📤 Step 4: Split into result3A (child of) and result3B (not child)
-        self.result3A = self.result3[self.result3['parent_match']].copy()
-        self.result3B = self.result3[~self.result3['parent_match']].copy()
-
-        print("✅ Parent-child check complete. Matches saved to result3A, others to result3B.")
-
-    except Exception as e:
-        print(f"❌ Error in parent_child: {e}")
+    # Step 3: Apply logic to self.result3 and split into result3A and result3B
+    self.result3['is_child'] = self.result3.apply(is_child, axis=1)
+    self.result3A = self.result3[self.result3['is_child']].drop(columns=['is_child'])
+    self.result3B = self.result3[~self.result3['is_child']].drop(columns=['is_child'])
