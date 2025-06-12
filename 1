@@ -1,188 +1,57 @@
-UI should include:
-	•	A centered file upload section
-	•	An “Upload and Parse” button with a modern dark look
-	•	A table with a dark background, light text, borderless style, and row hover effect (done using inline tricks like onmouseover).
-	•	Column headers should have a slightly brighter background.
-	•	Spacing and font sizes should reflect a clean, modern UI (like your reference image).
-	•	Optional simple pagination footer (static or dynamic) mimicking the screenshot.
-
-
-
-
-
-
-Build a Python Flask web application with an engaging and user-friendly HTML frontend that allows users to select and upload multiple Alteryx workflow files (.yxmd) at once. The app should:
-	•	Parse each workflow to extract formulas from Formula, Multi-Row Formula, and Filter tools.
-	•	Display a clean, visually appealing table with these columns:
-	1.	Workflow filename
-	2.	Tool Type (Formula, Multi-Row Formula, Filter)
-	3.	Original Alteryx formula/expression
-	4.	Equivalent Spark SQL expression converted from the Alteryx formula
-	•	Convert Alteryx formulas to Spark SQL expressions handling:
-	•	IF statements → CASE WHEN
-	•	Logical operators AND, OR, NOT
-	•	String functions like LEFT(), RIGHT(), UPPER(), LOWER()
-	•	Arithmetic and basic date/time functions
-	•	Provide intuitive UI features such as:
-	•	A stylish browse button for folder or multiple file selection
-	•	Clear, responsive layout with consistent spacing, readable fonts, and subtle colors for ease of use
-	•	Table with alternating row colors and hover effects for better readability
-	•	Include download buttons for exporting the results as CSV or Excel files
-	•	Use only Python and HTML (no JavaScript frameworks), but CSS styling is encouraged for better look and feel
-
-
-
-
-
-
-
-
-Objective:
-Create a web-based tool with a user-friendly interface that allows users to input Alteryx formulas and converts them into equivalent Spark SQL expressions.
-
-⸻
-
-✅ Requirements:
-
-1. Frontend (HTML + CSS + JavaScript)
-	•	Input text area for entering Alteryx formula
-	•	“Convert” button to trigger conversion
-	•	Read-only output area showing the Spark SQL result
-	•	“Copy” button to copy the output to clipboard
-	•	Responsive and modern UI (clean, colorful, intuitive)
-	•	Tooltip or help text with example formula
-
-2. Backend (Python with Flask)
-	•	Receives Alteryx formula input from frontend
-	•	Processes and converts common Alteryx functions to Spark SQL equivalents
-	•	e.g., IIF() → CASE WHEN, DateTimeAdd() → DATE_ADD(), && → AND, etc.
-	•	Sends back the converted formula to display on the page
-
-3. Functionality
-	•	No page reload (can be simple POST request or basic interactivity)
-	•	Accurate formula conversion logic
-	•	Easy to extend with more Alteryx functions
-
-⸻
-
-🧪 Example:
-
-Input:
-IIF([Sales] > 1000, "High", "Low")
-
-Output:
-CASE WHEN Sales > 1000 THEN "High" ELSE "Low" END
-
-
-
-
-
-
-
-
-
-
-
-
-
-•	Table 1 has columns A and B
-	•	Table 2 has columns C and NIV, where NIV indicates a hierarchy level from NIV1 (highest) to NIV5 (lowest).
-
-I want Python code (using pandas) that does the following:
-	1.	For each row in Table 1, take the value from column A.
-	2.	Search for this value in column C of Table 2. If found, get its NIV level.
-	3.	Try to find its parent by looking for a value in column C with a higher NIV level (e.g., if the value is at NIV5, check for a parent at NIV4, then NIV3, and so on up to NIV1).
-	4.	If a parent is found and that parent value exists in column B of the same row in Table 1, then place the entire row from Table 1 into Table 3A.
-	5.	If not, place the entire row into Table 3B instead.
-
-The output should be two Excel sheets: Table3A and Table3B.
-
-
-
-
-
-
-
-
-REGEX_Replace([Comment], "(\r\n)+$", "")
-
-
-
-IF IsNull([Col1]) THEN "Col1 is null" + '\n' ELSE "" ENDIF +
-IF IsNull([Col2]) THEN "Col2 is null" + '\n' ELSE "" ENDIF +
-IF IsNull([Col3]) THEN "Col3 is null" + '\n' ELSE "" ENDIF +
-IF IsNull([Col4]) THEN "Col4 is null" + '\n' ELSE "" ENDIF +
-IF IsNull([Col5]) THEN "Col5 is null" + '\n' ELSE "" ENDIF +
-IF IsNull([Col6]) THEN "Col6 is null" + '\n' ELSE "" ENDIF +
-IF IsNull([Col7]) THEN "Col7 is null" + '\n' ELSE "" ENDIF
-
-
-IF IsNull([Col1]) THEN "Col1 is null" ELSE "" ENDIF
-+ IIF(IsNull([Col2]), IIF(IsEmpty([Comment]), "Col2 is null", ", Col2 is null"), "")
-+ IIF(IsNull([Col3]), IIF(IsEmpty([Comment]), "Col3 is null", ", Col3 is null"), "")
-+ IIF(IsNull([Col4]), IIF(IsEmpty([Comment]), "Col4 is null", ", Col4 is null"), "")
-+ IIF(IsNull([Col5]), IIF(IsEmpty([Comment]), "Col5 is null", ", Col5 is null"), "")
-+ IIF(IsNull([Col6]), IIF(IsEmpty([Comment]), "Col6 is null", ", Col6 is null"), "")
-+ IIF(IsNull([Col7]), IIF(IsEmpty([Comment]), "Col7 is null", ", Col7 is null"), "")
-
-
-
-
-
-Build a complete Python application using Flask with the following features:
-
-⸻
-
-🔍 Functional Requirements:
-	1.	HTML Frontend (Embedded in Python)
-	•	A clean, minimal HTML form served from Flask.
-	•	Allows user to:
-	•	Upload an Alteryx workflow log file (text or Excel).
-	•	Upload the corresponding dataset file (Excel/CSV).
-	•	Submit for analysis.
-	•	After submission, show:
-	•	Workflow Run Time
-	•	Success or Failure
-	•	If failure:
-	•	Tool that failed (ToolId and name)
-	•	Column involved (e.g., a ‘Date’ column)
-	•	Exact row(s) and values that caused failure
-	•	AI-generated explanation of the root cause
-	•	Suggested fix using NLP/ML
-	2.	Python Backend
-	•	Use Flask to handle routing and file uploads.
-	•	Parse Alteryx log file:
-	•	Extract ToolId, tool name, error messages.
-	•	Determine if the workflow failed and what caused it.
-	•	Read dataset:
-	•	Identify type mismatches in columns (e.g., strings in a Date column).
-	•	Pinpoint bad rows and values.
-	•	Use AI/NLP logic:
-	•	Use sentence-transformers or GPT to generate natural-language root cause and fix suggestions.
-	•	Log the result to a central log file (CSV or Excel), capturing:
-	•	Workflow Name/ID
-	•	Timestamp
-	•	Status (Success / Failed)
-	•	Errors Found
-	•	Suggested Fix Summary
-
-⸻
-
-📦 Output Requirements:
-	•	Put everything (Flask app, HTML frontend, and logic) into a single .py file.
-	•	Do not use CSS files or JS — just simple but visually clean HTML with good structure (use <div>, <table>, <hr>, etc.).
-	•	Use Python packages:
-	•	pandas, re, datetime, openpyxl
-	•	Optionally: sentence-transformers or openai for NLP suggestions
-	•	The HTML should still look clean and usable — you can use inline HTML structure, <fieldset>, <h3>, etc., to organize layout.
-
-⸻
-
-🧠 Bonus:
-	•	Include error handling.
-	•	Add a “Download Report” button to export results as Excel.
-	•	Automatically name the log file based on the uploaded workflow or timestamp.
-
-⸻
-
-Please generate the complete working code for this — one Python file only, including the embedded HTML and backend logic.
+def parent_child(self):
+    self.logger.info("Starting parent_child...")
+
+    try:
+        # Define hierarchy levels from Table B
+        levels = ['niv1', 'niv2', 'niv3', 'niv4', 'niv5', 'niv6']
+
+        # Build index mapping of each code to its row index in SubProduct
+        code_index_map = {
+            str(code).strip(): idx for idx, code in enumerate(self.SubProduct['code']) if pd.notna(code)
+        }
+
+        # Get values of all levels
+        level_values = self.SubProduct[levels].values
+
+        def check_parent_child(row):
+            descendant = str(row['SubProductIAS']).strip()
+            ancestor = str(row['Type of operation']).strip()
+
+            # If descendant not in SubProduct codes, return False
+            if descendant not in code_index_map:
+                return False
+
+            # Get row index for descendant in SubProduct
+            desc_idx = code_index_map[descendant]
+            lvl_idx = -1
+
+            # Determine the level index of the descendant (niv1 to niv6)
+            for i in range(len(levels)):
+                if pd.notna(level_values[desc_idx][i]) and str(level_values[desc_idx][i]).strip() == descendant:
+                    lvl_idx = i
+                    break
+
+            # If level not found, return False
+            if lvl_idx == -1:
+                return False
+
+            # Check upward for ancestor in previous levels (niv1 to niv(lvl_idx - 1))
+            for parent_level_idx in range(lvl_idx - 1, -1, -1):
+                parent_code = level_values[desc_idx][parent_level_idx]
+                if pd.notna(parent_code) and str(parent_code).strip() == ancestor:
+                    return True
+
+            return False
+
+        # Copy and process self.result3
+        self.result3['parent_match'] = self.result3.apply(check_parent_child, axis=1)
+
+        # Split ABC (child of) and XYZ (not child of)
+        self.result3A = self.result3[self.result3['parent_match']]
+        self.result3B = self.result3[~self.result3['parent_match']]
+
+        self.logger.info("parent_child completed successfully.")
+
+    except Exception as e:
+        self.logger.error(f"Error in parent_child: {e}")
+        raise
