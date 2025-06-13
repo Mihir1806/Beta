@@ -1,151 +1,39 @@
-from flask import Flask, request, render_template_string, send_file
-import xml.etree.ElementTree as ET
-import pandas as pd
-import os
-import tempfile
+def parent_child(self):
+    import pandas as pd
 
-app = Flask(__name__)
-UPLOAD_FOLDER = tempfile.mkdtemp()
+    # Step 1: Build code → row mapping from SubProduct
+    code_row_map = self.SubProduct.set_index('Code').to_dict(orient='index')
 
-# Function to extract formulas and convert them
-def extract_and_convert_formulas(file_path, filename):
-    tree = ET.parse(file_path)
-    root = tree.getroot()
-    results = []
+    # Step 2: Function to get all ancestors of a code
+    def get_ancestors(code):
+        ancestors = []
+        row = code_row_map.get(code)
+        if not row:
+            return ancestors
+        for i in range(1, 7):
+            niv_col = f'Niv {i}'
+            val = row.get(niv_col)
+            if pd.notna(val):
+                # Search if this value exists as a Code
+                for c, r in code_row_map.items():
+                    if r.get(niv_col) == val:
+                        ancestors.append(c)
+        return ancestors
 
-    for node in root.iter():
-        tool_type = None
-        formulas = []
+    # Step 3: Function to check parent match
+    def check_parent(row):
+        child_code = str(row['SubProductIAS']).strip()
+        parent_code = str(row['Type of operation']).strip()
+        if child_code not in code_row_map or parent_code not in code_row_map:
+            return False
+        ancestors = get_ancestors(child_code)
+        return parent_code in ancestors
 
-        # Detect tool types and fetch expressions
-        if node.tag.endswith("Formula"):
-            tool_type = "Formula"
-            formulas = node.findall('.//Formula')
-        elif node.tag.endswith("MultiRowFormula"):
-            tool_type = "Multi-Row Formula"
-            formulas = node.findall('.//Expression')
-        elif node.tag.endswith("Filter"):
-            tool_type = "Filter"
-            formulas = node.findall('.//Expression')
+    # Step 4: Apply logic to result3
+    self.result3.loc[:, 'parent_match'] = self.result3.apply(check_parent, axis=1)
 
-        for f in formulas:
-            original = f.text or ""
-            converted = convert_to_spark_sql(original)
-            results.append({
-                "Workflow": filename,
-                "Tool Type": tool_type,
-                "Alteryx Formula": original.strip(),
-                "Spark SQL": converted.strip()
-            })
+    # Step 5: Split into A and B
+    self.result3A = self.result3[self.result3['parent_match']].drop(columns=['parent_match'])
+    self.result3B = self.result3[~self.result3['parent_match']].drop(columns=['parent_match'])
 
-    return results
-
-# Basic conversion logic
-def convert_to_spark_sql(formula):
-    if not formula:
-        return ""
-    formula = formula.replace("IF ", "CASE WHEN ")
-    formula = formula.replace(" THEN ", " THEN ")
-    formula = formula.replace(" ELSE ", " ELSE ")
-    formula = formula.replace("ENDIF", " END")
-    formula = formula.replace("AND", "AND")
-    formula = formula.replace("OR", "OR")
-    formula = formula.replace("NOT", "NOT")
-    formula = formula.replace("LEFT(", "SUBSTRING(")
-    formula = formula.replace("RIGHT(", "SUBSTRING(")
-    formula = formula.replace("UPPER(", "UPPER(")
-    formula = formula.replace("LOWER(", "LOWER(")
-    formula = formula.replace("Contains(", "LIKE CONCAT('%', ")
-    formula = formula.replace("DateTimeNow()", "CURRENT_TIMESTAMP()")
-    return formula
-
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    table = []
-    if request.method == 'POST':
-        files = request.files.getlist('files')
-        all_results = []
-
-        for file in files:
-            filename = file.filename
-            file_path = os.path.join(UPLOAD_FOLDER, filename)
-            file.save(file_path)
-            results = extract_and_convert_formulas(file_path, filename)
-            all_results.extend(results)
-
-        df = pd.DataFrame(all_results)
-        df.to_excel(os.path.join(UPLOAD_FOLDER, 'converted.xlsx'), index=False)
-        table = all_results
-
-    return render_template_string(HTML_TEMPLATE, table=table)
-
-@app.route('/download')
-def download():
-    return send_file(os.path.join(UPLOAD_FOLDER, 'converted.xlsx'), as_attachment=True)
-
-# Inline HTML UI
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>🧠 Alteryx to Spark SQL Converter</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 40px; }
-        h2 { color: #333; }
-        input[type="file"] { padding: 8px; }
-        .btn {
-            padding: 10px 15px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            margin-top: 10px;
-            cursor: pointer;
-        }
-        .btn:hover { background-color: #0056b3; }
-        table {
-            margin-top: 30px;
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            padding: 10px;
-            border: 1px solid #ccc;
-            vertical-align: top;
-            text-align: left;
-        }
-        th { background-color: #f2f2f2; }
-    </style>
-</head>
-<body>
-    <h2>🧠 Alteryx Workflow Formula → Spark SQL Converter</h2>
-    <form method="POST" enctype="multipart/form-data">
-        <label>Select .yxmd/.yxmc Files:</label><br><br>
-        <input type="file" name="files" multiple required><br><br>
-        <button class="btn" type="submit">Convert & View Results</button>
-    </form>
-
-    {% if table %}
-        <br><a class="btn" href="/download">⬇ Download Excel</a>
-        <table>
-            <tr>
-                <th>Workflow</th>
-                <th>Tool Type</th>
-                <th>Alteryx Formula</th>
-                <th>Spark SQL</th>
-            </tr>
-            {% for row in table %}
-                <tr>
-                    <td>{{ row['Workflow'] }}</td>
-                    <td>{{ row['Tool Type'] }}</td>
-                    <td>{{ row['Alteryx Formula'] }}</td>
-                    <td>{{ row['Spark SQL'] }}</td>
-                </tr>
-            {% endfor %}
-        </table>
-    {% endif %}
-</body>
-</html>
-"""
-
-if __name__ == '__main__':
-    app.run(debug=True)
+    print("✅ Done: Classified result3A (child-parent) and result3B (non-matches)")
