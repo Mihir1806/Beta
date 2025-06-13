@@ -1,45 +1,33 @@
 def parent_child(self):
     import pandas as pd
 
-    # Step 1: Build code → path mapping (each code and its ancestor path)
-    code_to_path = {}
-
+    # Step 1: Create code to level mapping from self.SubProduct
+    code_to_level = {}
     for _, row in self.SubProduct.iterrows():
         code = str(row['Code']).strip() if pd.notna(row['Code']) else None
         if not code:
             continue
-
-        path = []
         for i in range(1, 7):
-            niv = f'Niv {i}'
-            val = row.get(niv)
-            if pd.notna(val):
-                path.append(val.strip())
-        code_to_path[code] = path
+            niv_col = f'Niv {i}'
+            if pd.notna(row[niv_col]):
+                code_to_level[code] = i  # Save the level
 
-    # Step 2: Reverse: value in Nivs → level (for fast lookup)
-    code_to_level = {}
-    for code, path in code_to_path.items():
-        for i, _ in enumerate(path):
-            code_to_level[code] = i + 1
-
-    # Step 3: Check if Code2 is in any ancestor path of Code1
-    def is_child(row):
+    # Step 2: Define check function
+    def check_parent_child(row):
         code1 = str(row['SubProductIAS']).strip()
         code2 = str(row['Type of operation']).strip()
+        level1 = code_to_level.get(code1)
+        level2 = code_to_level.get(code2)
 
-        if code1 not in code_to_path or code2 not in code_to_path:
-            return False  # missing code
+        if level1 is not None and level2 is not None:
+            return level1 > level2  # code1 is child of code2
+        return False
 
-        # Code1 path: actual niv path values
-        path1 = code_to_path[code1]
-        path2 = code_to_path[code2]
+    # Step 3: Apply check
+    self.result3.loc[:, 'parent_match'] = self.result3.apply(check_parent_child, axis=1)
 
-        # If code2’s description (value in niv) is in code1’s path
-        return code_to_level.get(code1, 0) > code_to_level.get(code2, 0)
+    # Step 4: Split result3 into result3A and result3B
+    self.result3A = self.result3[self.result3['parent_match']].drop(columns=['parent_match'])
+    self.result3B = self.result3[~self.result3['parent_match']].drop(columns=['parent_match'])
 
-    # Step 4: Apply to self.result3
-    self.result3['is_child'] = self.result3.apply(is_child, axis=1)
-
-    self.result3A = self.result3[self.result3['is_child']].drop(columns=['is_child'])
-    self.result3B = self.result3[~self.result3['is_child']].drop(columns=['is_child'])
+    print("✅ Done! Split into result3A (ABC) and result3B (XYZ).")
