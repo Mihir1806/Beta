@@ -1,39 +1,25 @@
 def parent_child(self):
-    import pandas as pd
+    print("[INFO] Starting parent-child classification...")
 
-    # Step 1: Build code → row mapping from SubProduct
-    code_row_map = self.SubProduct.set_index('Code').to_dict(orient='index')
-
-    # Step 2: Function to get all ancestors of a code
-    def get_ancestors(code):
-        ancestors = []
-        row = code_row_map.get(code)
-        if not row:
-            return ancestors
-        for i in range(1, 7):
-            niv_col = f'Niv {i}'
-            val = row.get(niv_col)
-            if pd.notna(val):
-                # Search if this value exists as a Code
-                for c, r in code_row_map.items():
-                    if r.get(niv_col) == val:
-                        ancestors.append(c)
-        return ancestors
-
-    # Step 3: Function to check parent match
     def check_parent(row):
-        child_code = str(row['SubProductIAS']).strip()
-        parent_code = str(row['Type of operation']).strip()
-        if child_code not in code_row_map or parent_code not in code_row_map:
-            return False
-        ancestors = get_ancestors(child_code)
-        return parent_code in ancestors
+        code = str(row['SubProduct']).strip()
+        # Check parent for each Niv column (reverse order)
+        niv_columns = ['Niv6', 'Niv5', 'Niv4', 'Niv3', 'Niv2', 'Niv1']
+        for niv in niv_columns:
+            match_row = self.SubProduct[self.SubProduct['Code'] == code]
+            if not match_row.empty:
+                parent_code = match_row[niv].values[0]
+                if pd.notna(parent_code) and parent_code in self.result3['Type of operation'].values:
+                    return f"{code} is child of {parent_code}"
+        return f"{code} has no matching parent in Type of operation"
 
-    # Step 4: Apply logic to result3
+    # Apply parent-child check
     self.result3.loc[:, 'parent_match'] = self.result3.apply(check_parent, axis=1)
 
-    # Step 5: Split into A and B
-    self.result3A = self.result3[self.result3['parent_match']].drop(columns=['parent_match'])
-    self.result3B = self.result3[~self.result3['parent_match']].drop(columns=['parent_match'])
+    # Split into result3A and result3B
+    self.result3A = self.result3[self.result3['parent_match'].str.contains('is child of', na=False)].copy()
+    self.result3B = self.result3[~self.result3['parent_match'].str.contains('is child of', na=False)].copy()
 
-    print("✅ Done: Classified result3A (child-parent) and result3B (non-matches)")
+    print(f"[SUCCESS] Completed parent-child mapping.")
+    print(f"[INFO] Total records with parent match (result3A): {len(self.result3A)}")
+    print(f"[INFO] Total records without parent match (result3B): {len(self.result3B)}")
