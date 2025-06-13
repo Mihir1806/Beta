@@ -1,38 +1,46 @@
 def parent_child(self):
     import pandas as pd
 
-    # ✅ Step 1: Create a mapping of Code → hierarchy levels (row-wise)
-    code_to_ancestors = {}
+    try:
+        # ✅ Step 1: Create a mapping of Code → all ancestors (across Niv 1 to Niv 6)
+        code_to_ancestors = {}
 
-    for _, row in self.SubProduct.iterrows():
-        code = str(row['Code']).strip() if pd.notna(row['Code']) else None
-        if not code:
-            continue
+        for _, row in self.SubProduct.iterrows():
+            code = str(row['Code']).strip() if pd.notna(row['Code']) else None
+            if not code:
+                continue
 
-        # Collect ancestors from Niv1 to Niv5 (since Niv6 is the code itself)
-        ancestors = []
-        for i in range(1, 7):
-            niv_col = f'Niv {i}'
-            niv_val = row.get(niv_col)
-            if pd.notna(niv_val):
-                # Try to find the code associated with this Niv level
-                match = self.SubProduct[self.SubProduct[niv_col] == niv_val]
-                for match_idx, match_row in match.iterrows():
-                    ancestor_code = str(match_row['Code']).strip()
-                    if ancestor_code != code:
-                        ancestors.append(ancestor_code)
-        code_to_ancestors[code] = list(set(ancestors))  # Remove duplicates
+            ancestors = []
+            for i in range(1, 7):
+                niv_col = f'Niv {i}'
+                niv_val = row.get(niv_col)
+                if pd.notna(niv_val):
+                    # Find matching code for this niv value
+                    match_rows = self.SubProduct[self.SubProduct[niv_col] == niv_val]
+                    for _, match_row in match_rows.iterrows():
+                        ancestor_code = str(match_row['Code']).strip()
+                        if ancestor_code != code:
+                            ancestors.append(ancestor_code)
+            code_to_ancestors[code] = list(set(ancestors))
 
-    # ✅ Step 2: Check if Type of operation exists in ancestor chain of SubProductIAS
-    def is_descendant(row):
-        child_code = str(row['SubProductIAS']).strip()
-        parent_code = str(row['Type of operation']).strip()
-        ancestors = code_to_ancestors.get(child_code, [])
-        return parent_code in ancestors
+        # ✅ Step 2: Function to check if Type of operation is in ancestor chain
+        def is_descendant(row):
+            try:
+                child_code = str(row['SubProductIAS']).strip()
+                parent_code = str(row['Type of operation']).strip()
+                ancestors = code_to_ancestors.get(child_code, [])
+                return parent_code in ancestors
+            except Exception:
+                return False
 
-    # ✅ Step 3: Apply logic and split
-    self.result3.loc[:, 'parent_match'] = self.result3.apply(is_descendant, axis=1)
-    self.result3A = self.result3[self.result3['parent_match']].drop(columns=['parent_match'])
-    self.result3B = self.result3[~self.result3['parent_match']].drop(columns=['parent_match'])
+        # ✅ Step 3: Apply check and split
+        self.result3.loc[:, 'parent_match'] = self.result3.apply(is_descendant, axis=1)
 
-    print("✅ parent_child(): Ancestor match done → result3A (matched) and result3B (not matched)")
+        self.result3A = self.result3[self.result3['parent_match']].drop(columns=['parent_match'])
+        self.result3B = self.result3[~self.result3['parent_match']].drop(columns=['parent_match'])
+
+        print("Success: Result split into result3A and result3B (ancestor logic applied).")
+
+    except Exception as e:
+        # ⚠️ Print plain text error to avoid encoding issues
+        print(f"Error in parent_child(): {str(e).encode('ascii', 'ignore').decode('ascii')}")
