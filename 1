@@ -1,23 +1,45 @@
 def parent_child(self):
-    # Step 1: Build code_to_level mapping from SubProduct table
-    code_to_level = {}
-    for i in range(1, 7):  # Niv 1 to Niv 6
-        niv_col = f'Niv {i}'
-        if niv_col in self.SubProduct.columns:
-            for idx, val in self.SubProduct[niv_col].items():
-                code = self.SubProduct.at[idx, 'Code']
-                if pd.notna(code) and pd.notna(val):
-                    code_to_level[str(code).strip()] = i
+    import pandas as pd
 
-    # Step 2: Define a helper function to check parent-child relationship
+    # Step 1: Build code → path mapping (each code and its ancestor path)
+    code_to_path = {}
+
+    for _, row in self.SubProduct.iterrows():
+        code = str(row['Code']).strip() if pd.notna(row['Code']) else None
+        if not code:
+            continue
+
+        path = []
+        for i in range(1, 7):
+            niv = f'Niv {i}'
+            val = row.get(niv)
+            if pd.notna(val):
+                path.append(val.strip())
+        code_to_path[code] = path
+
+    # Step 2: Reverse: value in Nivs → level (for fast lookup)
+    code_to_level = {}
+    for code, path in code_to_path.items():
+        for i, _ in enumerate(path):
+            code_to_level[code] = i + 1
+
+    # Step 3: Check if Code2 is in any ancestor path of Code1
     def is_child(row):
         code1 = str(row['SubProductIAS']).strip()
         code2 = str(row['Type of operation']).strip()
-        level1 = code_to_level.get(code1)
-        level2 = code_to_level.get(code2)
-        return level1 is not None and level2 is not None and level1 > level2
 
-    # Step 3: Apply logic to self.result3 and split into result3A and result3B
+        if code1 not in code_to_path or code2 not in code_to_path:
+            return False  # missing code
+
+        # Code1 path: actual niv path values
+        path1 = code_to_path[code1]
+        path2 = code_to_path[code2]
+
+        # If code2’s description (value in niv) is in code1’s path
+        return code_to_level.get(code1, 0) > code_to_level.get(code2, 0)
+
+    # Step 4: Apply to self.result3
     self.result3['is_child'] = self.result3.apply(is_child, axis=1)
+
     self.result3A = self.result3[self.result3['is_child']].drop(columns=['is_child'])
     self.result3B = self.result3[~self.result3['is_child']].drop(columns=['is_child'])
