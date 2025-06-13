@@ -1,53 +1,38 @@
 def parent_child(self):
     import pandas as pd
 
-    # 🧠 STEP 1: Create a mapping of Code → Level (1-6)
-    code_to_level = {}
-    level_to_col = {1: 'Niv 1', 2: 'Niv 2', 3: 'Niv 3', 4: 'Niv 4', 5: 'Niv 5', 6: 'Niv 6'}
-
-    for level in range(1, 7):
-        col = f'Niv {level}'
-        for i, code in self.SubProduct['Code'].items():
-            if pd.notna(code):
-                code_to_level[code.strip()] = level
-
-    # 🧠 STEP 2: Build reverse hierarchy → for each code, find all parents
-    parent_lookup = {}
+    # ✅ Step 1: Create a mapping of Code → hierarchy levels (row-wise)
+    code_to_ancestors = {}
 
     for _, row in self.SubProduct.iterrows():
-        code = row['Code']
-        if pd.isna(code): continue
-        hierarchy = []
-        for lvl in range(1, 7):
-            niv_col = f'Niv {lvl}'
-            if pd.notna(row[niv_col]):
-                for potential_parent_code in self.SubProduct['Code']:
-                    if pd.notna(potential_parent_code):
-                        p_row = self.SubProduct[self.SubProduct['Code'] == potential_parent_code].iloc[0]
-                        if p_row[niv_col] == row[niv_col] and potential_parent_code != code:
-                            hierarchy.append(potential_parent_code)
-                            break
-        parent_lookup[code.strip()] = hierarchy
+        code = str(row['Code']).strip() if pd.notna(row['Code']) else None
+        if not code:
+            continue
 
-    # 🧠 STEP 3: Check if SubProductIAS is child of Type of operation (direct or indirect)
-    def is_child(row):
-        child = str(row['SubProductIAS']).strip()
-        parent = str(row['Type of operation']).strip()
-        visited = set()
-        current = child
+        # Collect ancestors from Niv1 to Niv5 (since Niv6 is the code itself)
+        ancestors = []
+        for i in range(1, 7):
+            niv_col = f'Niv {i}'
+            niv_val = row.get(niv_col)
+            if pd.notna(niv_val):
+                # Try to find the code associated with this Niv level
+                match = self.SubProduct[self.SubProduct[niv_col] == niv_val]
+                for match_idx, match_row in match.iterrows():
+                    ancestor_code = str(match_row['Code']).strip()
+                    if ancestor_code != code:
+                        ancestors.append(ancestor_code)
+        code_to_ancestors[code] = list(set(ancestors))  # Remove duplicates
 
-        while current in parent_lookup and current not in visited:
-            if parent == current:
-                return True
-            visited.add(current)
-            parents = parent_lookup.get(current, [])
-            if not parents:
-                break
-            current = parents[0]  # Only check immediate parent one level up
+    # ✅ Step 2: Check if Type of operation exists in ancestor chain of SubProductIAS
+    def is_descendant(row):
+        child_code = str(row['SubProductIAS']).strip()
+        parent_code = str(row['Type of operation']).strip()
+        ancestors = code_to_ancestors.get(child_code, [])
+        return parent_code in ancestors
 
-        return parent in parent_lookup.get(child, [])
+    # ✅ Step 3: Apply logic and split
+    self.result3.loc[:, 'parent_match'] = self.result3.apply(is_descendant, axis=1)
+    self.result3A = self.result3[self.result3['parent_match']].drop(columns=['parent_match'])
+    self.result3B = self.result3[~self.result3['parent_match']].drop(columns=['parent_match'])
 
-    # 🧠 STEP 4: Apply and split
-    self.result3.loc[:, 'parent_match'] = self.result3.apply(is_child, axis=1)
-    self.result3A = self.result3[self.result3['parent_match'] == True]
-    self.result3B = self.result3[self.result3['parent_match'] == False]
+    print("✅ parent_child(): Ancestor match done → result3A (matched) and result3B (not matched)")
