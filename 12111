@@ -1,391 +1,47 @@
-# bayesmatch.py
-from flask import Flask, request, render_template, jsonify, send_file
-from collections import defaultdict
-import pandas as pd
-import numpy as np
-import io
-import math
-import json
-import tempfile
-import os
-from functools import reduce
+def parent_child(self):
+    import pandas as pd
 
-app = Flask(__name__)
-
-# Global variables
-master_data = None
-transaction_data = None
-config = {
-    'start_key': None,
-    'end_key': None,
-    'attributes': []
-}
-
-class NaiveBayesClassifier:
-    def __init__(self):
-        self.class_probs = {}
-        self.feature_probs = defaultdict(dict)
-        self.classes = []
-        self.features = []
-    
-    def fit(self, X, y):
-        self.classes = list(set(y))
-        self.features = X.columns.tolist()
-        
-        # Calculate class probabilities
-        total_samples = len(y)
-        for cls in self.classes:
-            self.class_probs[cls] = (y == cls).sum() / total_samples
-        
-        # Calculate feature probabilities for each class
-        for feature in self.features:
-            for cls in self.classes:
-                cls_mask = (y == cls)
-                feature_values = X[feature][cls_mask]
-                
-                # Handle categorical features
-                value_counts = feature_values.value_counts(normalize=True).to_dict()
-                self.feature_probs[feature][cls] = value_counts
-    
-    def predict_proba(self, X):
-        results = []
-        for _, row in X.iterrows():
-            class_scores = {}
-            
-            for cls in self.classes:
-                # Start with the class probability
-                score = math.log(self.class_probs[cls])
-                
-                # Multiply by each feature probability (using log to avoid underflow)
-                for feature in self.features:
-                    feature_value = row[feature]
-                    if feature_value in self.feature_probs[feature][cls]:
-                        score += math.log(self.feature_probs[feature][cls][feature_value])
-                    else:
-                        # Laplace smoothing for unseen values
-                        score += math.log(1e-5)
-                
-                class_scores[cls] = score
-            
-            # Convert log-probabilities back to probabilities
-            max_score = max(class_scores.values())
-            exp_scores = {k: math.exp(v - max_score) for k, v in class_scores.items()}
-            total = sum(exp_scores.values())
-            probabilities = {k: v/total for k, v in exp_scores.items()}
-            
-            results.append(probabilities)
-        
-        return results
-
-@app.route('/', methods=['GET'])
-def index():
-    return '''
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>BayesMatch</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
-            .container { max-width: 1200px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 0 10px rgba(0,0,0,0.1); }
-            .upload-section { margin-bottom: 20px; padding: 20px; border: 2px dashed #ccc; border-radius: 5px; }
-            .config-section { margin-bottom: 20px; }
-            table { width: 100%; border-collapse: collapse; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; }
-            button { background: #4CAF50; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; }
-            button:hover { background: #45a049; }
-            .results { margin-top: 20px; }
-        </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>BayesMatch</h1>
-            
-            <div class="upload-section">
-                <h2>1. Upload Files</h2>
-                <form id="uploadForm" enctype="multipart/form-data">
-                    <div>
-                        <label>Master Dataset:</label>
-                        <input type="file" name="master" accept=".csv,.xlsx" required>
-                    </div>
-                    <div>
-                        <label>Transaction Dataset:</label>
-                        <input type="file" name="transaction" accept=".csv,.xlsx" required>
-                    </div>
-                    <button type="button" onclick="uploadFiles()">Upload</button>
-                </form>
-            </div>
-            
-            <div class="config-section">
-                <h2>2. Configure Matching</h2>
-                <div id="configUI" style="display: none;">
-                    <div>
-                        <label>Start Key:</label>
-                        <select id="startKey"></select>
-                    </div>
-                    <div>
-                        <label>End Key:</label>
-                        <select id="endKey"></select>
-                    </div>
-                    <div>
-                        <label>Attributes:</label>
-                        <select id="attributes" multiple></select>
-                    </div>
-                    <button onclick="saveConfig()">Save Configuration</button>
-                </div>
-            </div>
-            
-            <div>
-                <h2>3. Run Matching</h2>
-                <button id="runBtn" onclick="runMatching()" disabled>Run BayesMatch</button>
-            </div>
-            
-            <div class="results" id="resultsSection" style="display: none;">
-                <h2>Results</h2>
-                <div id="resultsTable"></div>
-                <button onclick="downloadResults()">Download Results</button>
-            </div>
-        </div>
-        
-        <script>
-            function uploadFiles() {
-                const formData = new FormData(document.getElementById('uploadForm'));
-                
-                fetch('/upload', {
-                    method: 'POST',
-                    body: formData
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        // Populate configuration UI
-                        const configUI = document.getElementById('configUI');
-                        configUI.style.display = 'block';
-                        
-                        const startKey = document.getElementById('startKey');
-                        const endKey = document.getElementById('endKey');
-                        const attributes = document.getElementById('attributes');
-                        
-                        // Clear existing options
-                        startKey.innerHTML = '';
-                        endKey.innerHTML = '';
-                        attributes.innerHTML = '';
-                        
-                        // Add common columns
-                        data.common_columns.forEach(col => {
-                            startKey.innerHTML += `<option value="${col}">${col}</option>`;
-                            endKey.innerHTML += `<option value="${col}">${col}</option>`;
-                            attributes.innerHTML += `<option value="${col}">${col}</option>`;
-                        });
-                        
-                        alert('Files uploaded successfully! Please configure your matching settings.');
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
-                });
-            }
-            
-            function saveConfig() {
-                const config = {
-                    start_key: document.getElementById('startKey').value,
-                    end_key: document.getElementById('endKey').value,
-                    attributes: Array.from(document.getElementById('attributes').selectedOptions)
-                        .map(opt => opt.value)
-                };
-                
-                fetch('/save_config', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify(config)
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        document.getElementById('runBtn').disabled = false;
-                        alert('Configuration saved! You can now run the matching.');
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
-                });
-            }
-            
-            function runMatching() {
-                fetch('/run_matching')
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success) {
-                        const resultsSection = document.getElementById('resultsSection');
-                        resultsSection.style.display = 'block';
-                        
-                        const resultsTable = document.getElementById('resultsTable');
-                        resultsTable.innerHTML = `
-                            <h3>Matching Results</h3>
-                            <table border="1">
-                                <thead>
-                                    <tr>
-                                        ${data.columns.map(col => `<th>${col}</th>`).join('')}
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${data.rows.map(row => `
-                                        <tr>
-                                            ${row.map(cell => `<td>${cell}</td>`).join('')}
-                                        </tr>
-                                    `).join('')}
-                                </tbody>
-                            </table>
-                        `;
-                    } else {
-                        alert('Error: ' + data.message);
-                    }
-                });
-            }
-            
-            function downloadResults() {
-                window.location.href = '/download_results';
-            }
-        </script>
-    </body>
-    </html>
-    '''
-
-@app.route('/upload', methods=['POST'])
-def upload_files():
-    global master_data, transaction_data
-    
     try:
-        master_file = request.files['master']
-        transaction_file = request.files['transaction']
-        
-        # Read files based on extension
-        def read_file(file):
-            if file.filename.endswith('.xlsx'):
-                return pd.read_excel(file)
-            else:
-                return pd.read_csv(file)
-        
-        master_data = read_file(master_file)
-        transaction_data = read_file(transaction_file)
-        
-        # Find common columns
-        common_columns = list(set(master_data.columns) & set(transaction_data.columns))
-        
-        return jsonify({
-            'success': True,
-            'common_columns': common_columns,
-            'master_columns': master_data.columns.tolist(),
-            'transaction_columns': transaction_data.columns.tolist()
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
+        # ✅ Step 1: Build Code to Ancestor Map using Niv hierarchy
+        code_to_ancestors = {}
 
-@app.route('/save_config', methods=['POST'])
-def save_config():
-    global config
-    try:
-        config = request.get_json()
-        return jsonify({'success': True})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
+        for _, row in self.SubProduct.iterrows():
+            code = str(row['Code']).strip() if pd.notna(row['Code']) else None
+            if not code:
+                continue
 
-@app.route('/run_matching', methods=['GET'])
-def run_matching():
-    global master_data, transaction_data, config
-    
-    try:
-        if master_data is None or transaction_data is None:
-            raise ValueError("Please upload both master and transaction files first")
-        
-        if not config['start_key'] or not config['end_key']:
-            raise ValueError("Please configure start and end keys first")
-        
-        # Prepare training data
-        X_train = master_data[config['attributes']]
-        y_train = master_data[config['end_key']]
-        
-        # Train Naive Bayes classifier
-        nb = NaiveBayesClassifier()
-        nb.fit(X_train, y_train)
-        
-        # Prepare test data
-        X_test = transaction_data[config['attributes']]
-        
-        # Get predictions
-        probabilities = nb.predict_proba(X_test)
-        
-        # Prepare results
-        results = []
-        for idx, row in transaction_data.iterrows():
-            prob = probabilities[idx]
-            top3 = sorted(prob.items(), key=lambda x: x[1], reverse=True)[:3]
-            
-            result_row = {
-                **row.to_dict(),
-                'Predicted_EndKey': top3[0][0],
-                'Prediction_Confidence': f"{top3[0][1]*100:.2f}%",
-                'Top3_Predictions': ', '.join([f"{k} ({v*100:.1f}%)" for k, v in top3])
-            }
-            
-            results.append(result_row)
-        
-        # Convert to DataFrame for display
-        results_df = pd.DataFrame(results)
-        
-        return jsonify({
-            'success': True,
-            'columns': results_df.columns.tolist(),
-            'rows': results_df.values.tolist()
-        })
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
+            # Collect all niv columns as potential ancestors
+            ancestors = []
+            for i in range(1, 7):
+                niv_col = f'Niv {i}'
+                niv_val = row.get(niv_col)
+                if pd.notna(niv_val):
+                    # Find matching code(s) in SubProduct having same niv description
+                    matching_rows = self.SubProduct[self.SubProduct[niv_col] == niv_val]
+                    for _, match_row in matching_rows.iterrows():
+                        parent_code = str(match_row['Code']).strip()
+                        if parent_code != code:
+                            ancestors.append(parent_code)
 
-@app.route('/download_results', methods=['GET'])
-def download_results():
-    global master_data, transaction_data, config
-    
-    try:
-        # Re-run matching to get results (or store them in session in a real app)
-        # This is simplified for the single-file example
-        X_train = master_data[config['attributes']]
-        y_train = master_data[config['end_key']]
-        
-        nb = NaiveBayesClassifier()
-        nb.fit(X_train, y_train)
-        
-        X_test = transaction_data[config['attributes']]
-        probabilities = nb.predict_proba(X_test)
-        
-        results = []
-        for idx, row in transaction_data.iterrows():
-            prob = probabilities[idx]
-            top3 = sorted(prob.items(), key=lambda x: x[1], reverse=True)[:3]
-            
-            result_row = {
-                **row.to_dict(),
-                'Predicted_EndKey': top3[0][0],
-                'Prediction_Confidence': f"{top3[0][1]*100:.2f}%",
-                'Top3_Predictions': ', '.join([f"{k} ({v*100:.1f}%)" for k, v in top3])
-            }
-            results.append(result_row)
-        
-        results_df = pd.DataFrame(results)
-        
-        # Create output file
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            results_df.to_excel(writer, index=False, sheet_name='Results')
-        output.seek(0)
-        
-        return send_file(
-            output,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-            as_attachment=True,
-            download_name='bayesmatch_results.xlsx'
-        )
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
+            code_to_ancestors[code] = list(set(ancestors))
 
-if __name__ == '__main__':
-    app.run(debug=True)
+        # ✅ Step 2: Check if 'Type of operation' is in ancestor list of 'SubProductIAS'
+        def has_parent_match(row):
+            try:
+                child_code = str(row['SubProductIAS']).strip()
+                parent_code = str(row['Type of operation']).strip()
+                ancestors = code_to_ancestors.get(child_code, [])
+                return parent_code in ancestors
+            except Exception:
+                return False
+
+        # ✅ Step 3: Apply to result3 and split
+        self.result3.loc[:, 'parent_match'] = self.result3.apply(has_parent_match, axis=1)
+
+        self.result3A = self.result3[self.result3['parent_match']].drop(columns=['parent_match'])
+        self.result3B = self.result3[~self.result3['parent_match']].drop(columns=['parent_match'])
+
+        print("✅ parent_child: result3 successfully split into result3A (ancestral match) and result3B (no match).")
+
+    except Exception as e:
+        print(f"⚠️ Error in parent_child(): {str(e).encode('ascii', 'ignore').decode('ascii')}")
