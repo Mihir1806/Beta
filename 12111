@@ -1,54 +1,47 @@
 def parent_child(self):
     import pandas as pd
 
-    # ✅ Step 1: Build code → level and level-wise code mapping from SubProduct
+    # ✅ Step 1: Build mapping - Code → Niv Level
     code_to_level = {}
-    level_to_codes = {}
+    level_cols = ['niv1', 'niv2', 'niv3', 'niv4', 'niv5', 'niv6']
+    for _, row in self.subproduct.iterrows():
+        for level, col in enumerate(level_cols, start=1):
+            if pd.notna(row[col]):
+                code = row['Code']
+                code_to_level[code] = level
+                break  # Only one Niv per code
 
-    for i in range(1, 7):
-        niv_col = f'Niv {i}'
-        for idx, code in self.SubProduct[['Code', niv_col]].dropna().values:
-            code = str(code).strip()
-            if code not in code_to_level:
-                code_to_level[code] = i
-                level_to_codes.setdefault(i, set()).add(code)
+    # ✅ Step 2: Build parent lookup table (code → its full hierarchy row)
+    code_to_row = {row['Code']: row for _, row in self.subproduct.iterrows()}
 
-    # ✅ Step 2: Build child → parent relationships
-    child_to_parent = {}
-    for code, level in code_to_level.items():
-        if level > 1:
-            parent_level = level - 1
-            possible_parents = level_to_codes.get(parent_level, set())
-            for parent_code in possible_parents:
-                # Check if parent and child share the same row path
-                child_row = self.SubProduct[self.SubProduct['Code'] == code]
-                parent_row = self.SubProduct[self.SubProduct['Code'] == parent_code]
-                if not child_row.empty and not parent_row.empty:
-                    # If child row contains parent's Niv col value, link them
-                    niv_parent_col = f'Niv {parent_level}'
-                    niv_child_col = f'Niv {level - 1}'
-                    if (child_row[niv_child_col].values[0] == parent_row[f'Niv {parent_level}'].values[0]):
-                        child_to_parent[code] = parent_code
-                        break
-
-    # ✅ Step 3: Trace all ancestors for each code
-    def get_ancestors(code):
-        ancestors = set()
-        while code in child_to_parent:
-            parent = child_to_parent[code]
-            ancestors.add(parent)
-            code = parent
-        return ancestors
-
-    # ✅ Step 4: Classify records in result3 based on ancestry
+    # ✅ Step 3: Define logic to trace ancestry
     def is_descendant(row):
-        child = str(row['SubProductIAS']).strip()
-        potential_parent = str(row['Type of operation']).strip()
-        return potential_parent in get_ancestors(child)
+        child_code = row['SubProductIAS']
+        parent_code = row['Type of operation']
 
-    # ✅ Step 5: Apply logic and split result
+        if child_code not in code_to_level or parent_code not in code_to_level:
+            return False  # Unknown codes can't be compared
+
+        child_level = code_to_level[child_code]
+        if child_level == 1:
+            return False  # Top level cannot have parents
+
+        # Walk up the hierarchy from child
+        hierarchy_row = code_to_row.get(child_code)
+        if hierarchy_row is None:
+            return False
+
+        # Collect all parent codes from higher Niv columns in this row
+        for level in range(child_level - 1, 0, -1):  # Levels above child
+            col = level_cols[level - 1]
+            parent_val = hierarchy_row[col]
+            if pd.notna(parent_val) and parent_val == parent_code:
+                return True  # Found matching parent in lineage
+        return False
+
+    # ✅ Step 4: Apply logic to result3
     matches = self.result3.apply(is_descendant, axis=1)
     self.result3A = self.result3[matches].reset_index(drop=True)
     self.result3B = self.result3[~matches].reset_index(drop=True)
 
-    print("✅ Classified into result3A (valid child-parent) and result3B (not related).")
+    print("Classified into result3A (valid child-parent) and result3B (not related).")
