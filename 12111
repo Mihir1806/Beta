@@ -1,47 +1,13 @@
-def parent_child(self):
-    import pandas as pd
+SubProduct Table
 
-    # ✅ Step 1: Build mapping - Code → Niv Level
-    code_to_level = {}
-    level_cols = ['niv1', 'niv2', 'niv3', 'niv4', 'niv5', 'niv6']
-    for _, row in self.subproduct.iterrows():
-        for level, col in enumerate(level_cols, start=1):
-            if pd.notna(row[col]):
-                code = row['Code']
-                code_to_level[code] = level
-                break  # Only one Niv per code
+This table defines the hierarchy levels for each code.
+Each code will appear only once, and only in one Niv column from Niv1 to Niv6.
 
-    # ✅ Step 2: Build parent lookup table (code → its full hierarchy row)
-    code_to_row = {row['Code']: row for _, row in self.subproduct.iterrows()}
+result3 
+This contains child–parent code pairs that I want to validate:
 
-    # ✅ Step 3: Define logic to trace ancestry
-    def is_descendant(row):
-        child_code = row['SubProductIAS']
-        parent_code = row['Type of operation']
+Objective:
 
-        if child_code not in code_to_level or parent_code not in code_to_level:
-            return False  # Unknown codes can't be compared
-
-        child_level = code_to_level[child_code]
-        if child_level == 1:
-            return False  # Top level cannot have parents
-
-        # Walk up the hierarchy from child
-        hierarchy_row = code_to_row.get(child_code)
-        if hierarchy_row is None:
-            return False
-
-        # Collect all parent codes from higher Niv columns in this row
-        for level in range(child_level - 1, 0, -1):  # Levels above child
-            col = level_cols[level - 1]
-            parent_val = hierarchy_row[col]
-            if pd.notna(parent_val) and parent_val == parent_code:
-                return True  # Found matching parent in lineage
-        return False
-
-    # ✅ Step 4: Apply logic to result3
-    matches = self.result3.apply(is_descendant, axis=1)
-    self.result3A = self.result3[matches].reset_index(drop=True)
-    self.result3B = self.result3[~matches].reset_index(drop=True)
-
-    print("Classified into result3A (valid child-parent) and result3B (not related).")
+Split the input into two parts:
+	•	result3A: If Type of operation is a valid ancestor (appears in a higher Niv than the SubProductIAS in the same hierarchy chain).
+	•	result3B: If Type of operation is not related (not a parent).
