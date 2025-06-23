@@ -1,49 +1,18 @@
-def parent_child(self):
-    import pandas as pd
+Develop a Python function parent_child(self) that determines whether a given SubProductIAS code is a child of a given Type of operation code based on a hierarchical level mapping defined in a table called SubProduct.
 
-    # Step 1: Build Code → Niv Level and Code → Row Mapping
-    code_to_level = {}
-    code_to_row = {}
-    for _, row in self.SubProduct.iterrows():
-        code = str(row['Code']).strip()
-        for i in range(1, 7):  # Niv 1 to Niv 6
-            niv_col = f'Niv {i}'
-            if pd.notna(row.get(niv_col)):
-                code_to_level[code] = i
-                code_to_row[code] = row
-                break  # Only one Niv per code
+⸻
 
-    # Step 2: Get all ancestors (by Code) of a given child code
-    def get_ancestors(code):
-        ancestors = []
-        if code not in code_to_row or code not in code_to_level:
-            return ancestors
-        row = code_to_row[code]
-        child_level = code_to_level[code]
+📥 Inputs:
 
-        for i in range(1, child_level):
-            niv_col = f'Niv {i}'
-            desc = row.get(niv_col)
-            if pd.isna(desc):
-                continue
-            # Find the parent code that has this description at level i
-            match = self.SubProduct[self.SubProduct[niv_col] == desc]
-            if not match.empty:
-                parent_code = str(match.iloc[0]['Code']).strip()
-                ancestors.append(parent_code)
-        return ancestors
+1. self.SubProduct (Hierarchy Table)
+	•	A DataFrame containing the hierarchical relationship of codes.
+	•	Contains the following columns:
+	•	Code: Unique code identifier (e.g., G00000, X05000).
+	•	Niv 1 to Niv 6: Hierarchy levels. Each code appears only once in one of the Niv levels.
+	•	One and only one Niv column is non-null for each Code.
 
-    # Step 3: Check if Type of operation is any ancestor of SubProductIAS
-    def is_parent(row):
-        child_code = str(row['SubProductIAS']).strip()
-        parent_code = str(row['Type of operation']).strip()
-        return parent_code in get_ancestors(child_code)
-
-    # Step 4: Apply and Split into result3A and result3B
-    try:
-        result3_mask = self.result3.apply(is_parent, axis=1)
-        self.result3A = self.result3[result3_mask].reset_index(drop=True)
-        self.result3B = self.result3[~result3_mask].reset_index(drop=True)
-        print("✅ parent_child(): result3A (valid parents) and result3B (invalid) created successfully.")
-    except Exception as e:
-        print(f"❌ Error in parent_child(): {e}")
+2. self.result3 (Code Pairing Table)
+	•	A DataFrame containing two columns:
+	•	SubProductIAS: The child code.
+	•	Type of operation: The potential parent code.
+	•	These codes are to be checked against the hierarchy in self.SubProduct.
