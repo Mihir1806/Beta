@@ -1,50 +1,10 @@
-let
-    // Replace this with your actual error log source
-    ErrorLog = Excel.CurrentWorkbook(){[Name="ErrorLog"]}[Content],
-    
-    // Replace this with your actual tool list source
-    ToolList = Excel.CurrentWorkbook(){[Name="ToolList"]}[Content],
-    
-    // Function to replace ToolId with ToolId (ToolName)
-    ReplaceToolIds = (errorText as text, jobName as text) as text =>
-        let
-            // Find all ToolId occurrences (case insensitive)
-            ToolIdPositions = Text.PositionOfAny(errorText, {"Toolid ", "ToolId ", "toolid "}, Occurrence.All),
-            
-            // Process each found ToolId
-            Result = List.Accumulate(
-                ToolIdPositions,
-                errorText,
-                (currentText, position) =>
-                    let
-                        // Extract the ToolId number (assuming it follows "Toolid ")
-                        ToolIdEnd = Text.PositionOf(errorText, ":", position),
-                        ToolIdFull = Text.Middle(errorText, position, ToolIdEnd - position),
-                        ToolIdNumber = Text.Trim(Text.Split(ToolIdFull, " "){1}),
-                        
-                        // Look up the ToolName (matching both ToolId and JobName)
-                        MatchingTools = Table.SelectRows(ToolList, each 
-                            Text.From([ToolId]) = ToolIdNumber and 
-                            [JobName] = jobName),
-                        
-                        ToolName = if Table.IsEmpty(MatchingTools) then 
-                            "Unknown Tool" else 
-                            Table.FirstValue(MatchingTools[ToolName]),
-                        
-                        // Create replacement text
-                        Replacement = "ToolId " & ToolIdNumber & " (" & ToolName & ")"
-                    in
-                        Text.Replace(currentText, ToolIdFull, Replacement)
-            )
-        in
-            Result,
-    
-    // Apply the transformation
-    FormattedErrors = Table.AddColumn(
-        ErrorLog, 
-        "FormattedErrorText", 
-        each ReplaceToolIds([ErrorText], [JobName]), 
-        type text
-    )
-in
-    FormattedErrors
+import pandas as pd
+
+# Load Excel file
+df = pd.read_excel('input.xlsx')
+
+# Trim all string values
+df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+
+# Save the cleaned file
+df.to_excel('output.xlsx', index=False)
