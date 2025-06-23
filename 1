@@ -1,54 +1,49 @@
 def parent_child(self):
     import pandas as pd
 
-    # ✅ Step 1: Build code → (level, row) mapping
+    # Step 1: Build Code → Niv Level and Code → Row Mapping
     code_to_level = {}
     code_to_row = {}
-    
     for _, row in self.SubProduct.iterrows():
         code = str(row['Code']).strip()
-        for i in range(1, 7):
+        for i in range(1, 7):  # Niv 1 to Niv 6
             niv_col = f'Niv {i}'
-            if pd.notna(row[niv_col]):
+            if pd.notna(row.get(niv_col)):
                 code_to_level[code] = i
                 code_to_row[code] = row
-                break  # One Niv per code guaranteed
+                break  # Only one Niv per code
 
-    # ✅ Step 2: Define function to walk up and check if parent exists
-    def is_descendant(row):
-        child_code = str(row['SubProductIAS']).strip()
-        parent_code = str(row['Type of operation']).strip()
+    # Step 2: Get all ancestors (by Code) of a given child code
+    def get_ancestors(code):
+        ancestors = []
+        if code not in code_to_row or code not in code_to_level:
+            return ancestors
+        row = code_to_row[code]
+        child_level = code_to_level[code]
 
-        if child_code not in code_to_level or parent_code not in code_to_level:
-            return False
-
-        child_level = code_to_level[child_code]
-        parent_level = code_to_level[parent_code]
-
-        if parent_level >= child_level:
-            return False  # A parent must be at a higher level (lower number)
-
-        # Get the full row of the child to trace hierarchy up
-        child_row = code_to_row[child_code]
-
-        # Check all higher-level Niv columns in the child row for parent's description
         for i in range(1, child_level):
             niv_col = f'Niv {i}'
-            parent_description = self.SubProduct.loc[
-                self.SubProduct['Code'] == parent_code, f'Niv {i}'
-            ].values
-
-            if len(parent_description) == 0 or pd.isna(child_row[niv_col]):
+            desc = row.get(niv_col)
+            if pd.isna(desc):
                 continue
+            # Find the parent code that has this description at level i
+            match = self.SubProduct[self.SubProduct[niv_col] == desc]
+            if not match.empty:
+                parent_code = str(match.iloc[0]['Code']).strip()
+                ancestors.append(parent_code)
+        return ancestors
 
-            if str(child_row[niv_col]).strip() == str(parent_description[0]).strip():
-                return True
+    # Step 3: Check if Type of operation is any ancestor of SubProductIAS
+    def is_parent(row):
+        child_code = str(row['SubProductIAS']).strip()
+        parent_code = str(row['Type of operation']).strip()
+        return parent_code in get_ancestors(child_code)
 
-        return False
-
-    # ✅ Step 3: Apply function and split result
-    matches = self.result3.apply(is_descendant, axis=1)
-    self.result3A = self.result3[matches].reset_index(drop=True)
-    self.result3B = self.result3[~matches].reset_index(drop=True)
-
-    print("Classified into result3A (valid parent) and result3B (not related).")
+    # Step 4: Apply and Split into result3A and result3B
+    try:
+        result3_mask = self.result3.apply(is_parent, axis=1)
+        self.result3A = self.result3[result3_mask].reset_index(drop=True)
+        self.result3B = self.result3[~result3_mask].reset_index(drop=True)
+        print("✅ parent_child(): result3A (valid parents) and result3B (invalid) created successfully.")
+    except Exception as e:
+        print(f"❌ Error in parent_child(): {e}")
