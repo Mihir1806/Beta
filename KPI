@@ -1,8 +1,60 @@
+def parent_child(self):
+    import pandas as pd
 
-I am experiencing significant performance issues on my HVD. The RAM usage remains consistently high—around 11.5 GB out of 12 GB—which causes the system to run extremely slowly and impacts overall productivity.
+    # ✅ Step 1: Build a mapping of Code → Level and Code → Full Row
+    code_to_level = {}
+    code_to_row = {}
 
-The IT team has already attempted to delete cache files, but there has been no improvement in memory usage.
+    for _, row in self.SubProduct.iterrows():
+        code = str(row['Code']).strip()
+        for i in range(1, 7):
+            niv_col = f'Niv {i}'
+            if pd.notna(row.get(niv_col)):
+                code_to_level[code] = i
+                code_to_row[code] = row
+                break  # Only one Niv per code
 
-Additionally, I’m facing issues while working with Alteryx. Even after saving a workflow, the changes often do not get saved correctly. When I reopen the file, it either shows an older autosaved version or appears to be deleted, making it difficult to work reliably.
+    # ✅ Step 2: Prepare empty lists for result3A and result3B
+    result3A_rows = []
+    result3B_rows = []
 
-Requesting your support in resolving these issues at the earliest.
+    # ✅ Step 3: Iterate over each row in result3
+    for _, row in self.result3.iterrows():
+        try:
+            child_code = str(row['SubProductIAS']).strip()
+            possible_parent = str(row['Type of operation']).strip()
+
+            # ⛔ Skip if child_code not found
+            if child_code not in code_to_row or child_code not in code_to_level:
+                result3B_rows.append(row)
+                continue
+
+            child_row = code_to_row[child_code]
+            child_level = code_to_level[child_code]
+            match_found = False
+
+            # 🔁 Walk through all Niv columns above the child level
+            for i in range(1, child_level):
+                niv_col = f'Niv {i}'
+                if pd.notna(child_row.get(niv_col)):
+                    desc = str(child_row[niv_col]).strip()
+                    match = self.SubProduct[self.SubProduct[niv_col].astype(str).str.strip() == desc]
+                    if not match.empty:
+                        parent_code = str(match.iloc[0]['Code']).strip()
+                        if parent_code == possible_parent:
+                            match_found = True
+                            break
+
+            if match_found:
+                result3A_rows.append(row)
+            else:
+                result3B_rows.append(row)
+
+        except Exception as e:
+            result3B_rows.append(row)
+
+    # ✅ Step 4: Create final result3A and result3B DataFrames
+    self.result3A = pd.DataFrame(result3A_rows).reset_index(drop=True)
+    self.result3B = pd.DataFrame(result3B_rows).reset_index(drop=True)
+
+    print("✅ parent_child(): Finished. Classified into result3A and result3B.")
