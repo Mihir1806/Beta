@@ -1,47 +1,54 @@
 def parent_child(self):
     import pandas as pd
 
-    # 🚧 Validate expected columns
-    required_cols = ['Code', 'Niv 1', 'Niv 2', 'Niv 3', 'Niv 4', 'Niv 5', 'Niv 6']
-    if not all(col in self.SubProduct.columns for col in required_cols):
-        raise ValueError("Missing one or more required columns in SubProduct: " + ", ".join(required_cols))
-
-    if not all(col in self.result3.columns for col in ['SubProductIAS', 'Type of operation']):
-        raise ValueError("Missing 'SubProductIAS' or 'Type of operation' columns in result3")
-
-    # 🧠 Step 1: Build a code-to-level mapping from Niv 1–6
+    # ✅ Step 1: Build code → (level, row) mapping
     code_to_level = {}
+    code_to_row = {}
+    
     for _, row in self.SubProduct.iterrows():
-        code = str(row['Code']).strip() if pd.notna(row['Code']) else None
-        if not code:
-            continue
+        code = str(row['Code']).strip()
         for i in range(1, 7):
             niv_col = f'Niv {i}'
-            if pd.notna(row.get(niv_col, None)):
+            if pd.notna(row[niv_col]):
                 code_to_level[code] = i
-                break  # Stop at the first non-null Niv for this Code
+                code_to_row[code] = row
+                break  # One Niv per code guaranteed
 
-    # 🔍 Step 2: Function to check if one code is child of another
-    def is_child(row):
-        code1 = str(row['SubProductIAS']).strip()
-        code2 = str(row['Type of operation']).strip()
-        level1 = code_to_level.get(code1)
-        level2 = code_to_level.get(code2)
+    # ✅ Step 2: Define function to walk up and check if parent exists
+    def is_descendant(row):
+        child_code = str(row['SubProductIAS']).strip()
+        parent_code = str(row['Type of operation']).strip()
 
-        # 🎯 If both levels are known, check hierarchy
-        if level1 is not None and level2 is not None:
-            return level1 > level2  # child if deeper in hierarchy
-        return False  # If any code not found, assume no relationship
+        if child_code not in code_to_level or parent_code not in code_to_level:
+            return False
 
-    # 🧪 Step 3: Apply logic to check parent-child relationship
-    self.result3 = self.result3.assign(
-        parent_match=self.result3.apply(is_child, axis=1)
-    )
+        child_level = code_to_level[child_code]
+        parent_level = code_to_level[parent_code]
 
-    # 📤 Step 4: Split into matched and unmatched sets
-    self.result3A = self.result3[self.result3['parent_match']].drop(columns=['parent_match'])
-    self.result3B = self.result3[~self.result3['parent_match']].drop(columns=['parent_match'])
+        if parent_level >= child_level:
+            return False  # A parent must be at a higher level (lower number)
 
-    print("✅ parent_child function completed:")
-    print(f"  - Matches found: {len(self.result3A)}")
-    print(f"  - Non-matches: {len(self.result3B)}")
+        # Get the full row of the child to trace hierarchy up
+        child_row = code_to_row[child_code]
+
+        # Check all higher-level Niv columns in the child row for parent's description
+        for i in range(1, child_level):
+            niv_col = f'Niv {i}'
+            parent_description = self.SubProduct.loc[
+                self.SubProduct['Code'] == parent_code, f'Niv {i}'
+            ].values
+
+            if len(parent_description) == 0 or pd.isna(child_row[niv_col]):
+                continue
+
+            if str(child_row[niv_col]).strip() == str(parent_description[0]).strip():
+                return True
+
+        return False
+
+    # ✅ Step 3: Apply function and split result
+    matches = self.result3.apply(is_descendant, axis=1)
+    self.result3A = self.result3[matches].reset_index(drop=True)
+    self.result3B = self.result3[~matches].reset_index(drop=True)
+
+    print("Classified into result3A (valid parent) and result3B (not related).")
