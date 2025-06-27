@@ -1,3 +1,15 @@
-This solution automates job data collection from emails, processes and classifies it with built-in failure detection, and presents real-time insights through a dynamic dashboard. It ensures efficient monitoring, clear visibility into errors, and faster decision-making with proactive alerts and logging.
+SELECT
+    /* KEY: CustomerID, or (if that’s empty/NULL) the FullName */
+    COALESCE(NULLIF(TRIM(CAST(CustomerID AS VARCHAR)), ''),
+             TRIM(FullName))      AS "key",
 
-The system enhances efficiency by automating job tracking, providing real-time visibility into failures, and reducing manual effort. It improves accuracy, accelerates issue resolution, and scales easily for expanding job data sources.
+    /* AMT: comma-separated list of whichever fields are blank in this row */
+    LTRIM(RTRIM(
+        CONCAT_WS(', ',
+            CASE WHEN (FullName    IS NULL OR FullName    = '') THEN 'FullName'    END,
+            CASE WHEN (Email       IS NULL OR Email       = '') THEN 'Email'       END,
+            CASE WHEN (PhoneNumber IS NULL OR PhoneNumber = '') THEN 'PhoneNumber' END,
+            CASE WHEN  JoinDate    IS NULL                      THEN 'JoinDate'    END
+        )
+    ))                           AS "amt"
+FROM Customers;
