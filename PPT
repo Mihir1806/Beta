@@ -19,3 +19,22 @@ FROM (
         
     FROM Customers
 );
+
+SELECT
+    identifier || ' - ' || blank_cols AS key,
+    0 AS amt
+FROM (
+    SELECT
+        COALESCE(NULLIF(TRIM(TO_CHAR(CustomerID)), ''), TRIM(FullName)) AS identifier,
+        
+        RTRIM(
+            CASE WHEN FullName IS NULL OR TRIM(FullName) = '' THEN 'FullName, ' ELSE '' END ||
+            CASE WHEN Email IS NULL OR TRIM(Email) = '' THEN 'Email, ' ELSE '' END ||
+            CASE WHEN PhoneNumber IS NULL OR TRIM(PhoneNumber) = '' THEN 'PhoneNumber, ' ELSE '' END ||
+            CASE WHEN JoinDate IS NULL THEN 'JoinDate, ' ELSE '' END,
+        ', '
+        ) AS blank_cols
+        
+    FROM Customers
+)
+WHERE blank_cols IS NOT NULL AND TRIM(blank_cols) <> '';
