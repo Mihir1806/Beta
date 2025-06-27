@@ -1,20 +1,36 @@
 SELECT
-    CASE
+    CASE 
         WHEN blank_cols = '' THEN identifier
-        ELSE CONCAT(identifier, ' - ', blank_cols)
-    END AS `key`,
-    
+        ELSE identifier || ' - ' || blank_cols
+    END AS key,
     0 AS amt
 FROM (
     SELECT
-        COALESCE(NULLIF(TRIM(CustomerID), ''), TRIM(FullName)) AS identifier,
+        -- Use CustomerID if present, else FullName
+        COALESCE(NULLIF(TRIM(CAST(CustomerID AS VARCHAR)), ''), TRIM(FullName)) AS identifier,
         
-        CONCAT_WS(', ',
-            IF(FullName IS NULL OR FullName = '', 'FullName', NULL),
-            IF(Email IS NULL OR Email = '', 'Email', NULL),
-            IF(PhoneNumber IS NULL OR PhoneNumber = '', 'PhoneNumber', NULL),
-            IF(JoinDate IS NULL, 'JoinDate', NULL)
-        ) AS blank_cols
-        
+        -- Build comma-separated list of blank columns manually
+        TRIM(
+            CASE 
+                WHEN (FullName IS NULL OR TRIM(FullName) = '') THEN 'FullName, ' ELSE '' 
+            END ||
+            CASE 
+                WHEN (Email IS NULL OR TRIM(Email) = '') THEN 'Email, ' ELSE '' 
+            END ||
+            CASE 
+                WHEN (PhoneNumber IS NULL OR TRIM(PhoneNumber) = '') THEN 'PhoneNumber, ' ELSE '' 
+            END ||
+            CASE 
+                WHEN (JoinDate IS NULL) THEN 'JoinDate, ' ELSE '' 
+            END
+        ) AS blank_cols_raw
+
     FROM Customers
-) AS sub;
+) raw
+-- Clean trailing comma/space (fallback if TRIM didn't clean fully)
+CROSS APPLY (
+    SELECT 
+        LEFT(blank_cols_raw, LEN(blank_cols_raw) - 
+             CASE WHEN RIGHT(blank_cols_raw, 2) = ', ' THEN 2 ELSE 0 END
+        ) AS blank_cols
+) cleaned;
