@@ -1,10 +1,87 @@
-import pandas as pd
+import os, math, pandas as pd
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm                 #  ← progress bars
 
-# Load Excel file
-df = pd.read_excel('input.xlsx')
+# ────────────────────────────────────────────────────────────────────────────────
+def save_df_to_excel_fast(self, df, filename, show_progress=True):
+    """
+    Save *df* to <output_dir>/<filename> (.xlsx) using xlsxwriter, splitting
+    into new sheets once 70 % of Excel’s row limit is hit.  Shows a per-file
+    progress bar if *show_progress* is True.
+    """
+    MAX_ROWS = 1_048_576
+    ROWS_PER_SHEET = int(MAX_ROWS * 0.70)
 
-# Trim all string values
-df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
+    output_path  = os.path.join(self.output_dir, filename)
+    total_rows   = len(df)
+    sheet_count  = math.ceil(total_rows / ROWS_PER_SHEET)
 
-# Save the cleaned file
-df.to_excel('output.xlsx', index=False)
+    bar = tqdm(
+        total=sheet_count,
+        desc=f"Saving {filename}",
+        unit="sheet",
+        leave=False,
+        disable=not show_progress,
+    )
+
+    try:
+        with pd.ExcelWriter(
+            output_path,
+            engine="xlsxwriter",
+            options={"constant_memory": True},
+        ) as writer:
+            for i in range(sheet_count):
+                start, end = i * ROWS_PER_SHEET, min((i + 1) * ROWS_PER_SHEET, total_rows)
+                df.iloc[start:end].to_excel(
+                    writer,
+                    sheet_name=f"Sheet{i + 1}",
+                    index=False,
+                )
+                bar.update(1)                 # ← bump the sheet bar
+        self.logger.info(f"✅  Saved {filename} ({total_rows:,} rows, {sheet_count} sheet[s])")
+    except Exception as e:
+        self.logger.error(f"❌  Failed saving {filename}: {e}")
+        raise
+    finally:
+        bar.close()
+
+# ────────────────────────────────────────────────────────────────────────────────
+def save_all_excel_files(self, max_workers=4, show_progress=True):
+    """
+    Save every DataFrame → Excel file in parallel.
+    A global progress bar shows how many files are done.
+    """
+    dfs_to_save = {
+        "I958.xlsx": self.I958,
+        "I962.xlsx": self.I962,
+        "Y001.xlsx": self.Y001,
+        "I974.xlsx": self.I974,
+        "SubProduct.xlsx": self.SubProduct,
+        "ISM01.xlsx": self.ISM,
+        "Matisse.xlsx": self.Matisse,
+        "result1.xlsx": self.result1,
+        "result2.xlsx": self.result2,
+        "result3.xlsx": self.result3,
+        "result3A.xlsx": self.result3A,
+        "result3B.xlsx": self.result3B,
+        "TVA.xlsx": self.TVA,
+    }
+
+    file_bar = tqdm(
+        total=len(dfs_to_save),
+        desc="Overall progress",
+        unit="file",
+        disable=not show_progress,
+    )
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        future_to_fname = {
+            pool.submit(self.save_df_to_excel_fast, df, fname, show_progress): fname
+            for fname, df in dfs_to_save.items()
+        }
+        for fut in as_completed(future_to_fname):
+            fut.result()      # re-raise errors if any
+            file_bar.update(1)
+
+    file_bar.close()
+    self.logger.info("🏁  All Excel files saved successfully.")
