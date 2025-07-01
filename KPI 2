@@ -1,15 +1,28 @@
-SELECT
-    /* KEY: CustomerID, or (if that’s empty/NULL) the FullName */
-    COALESCE(NULLIF(TRIM(CAST(CustomerID AS VARCHAR)), ''),
-             TRIM(FullName))      AS "key",
+You're a Python performance expert.
 
-    /* AMT: comma-separated list of whichever fields are blank in this row */
-    LTRIM(RTRIM(
-        CONCAT_WS(', ',
-            CASE WHEN (FullName    IS NULL OR FullName    = '') THEN 'FullName'    END,
-            CASE WHEN (Email       IS NULL OR Email       = '') THEN 'Email'       END,
-            CASE WHEN (PhoneNumber IS NULL OR PhoneNumber = '') THEN 'PhoneNumber' END,
-            CASE WHEN  JoinDate    IS NULL                      THEN 'JoinDate'    END
-        )
-    ))                           AS "amt"
-FROM Customers;
+I have a file named `code.py` that processes Excel files using pandas, involving:
+- Reading multiple `.xlsx` files
+- Transforming data with `for` and `if-else` logic
+- Saving transformed DataFrames back to `.xlsx` (3–4 times, ~3 million rows total)
+
+Your job is to **optimize the code to make it run as fast as possible** using **both CPU and GPU**, without changing the functionality.
+
+Rewrite `code.py` so that it:
+
+1. Reads all Excel files in **parallel using CPU cores** (`concurrent.futures.ProcessPoolExecutor`).
+2. Runs transformation logic on the **GPU using RAPIDS** (`cuDF`, `cuPy`, `numba`) **if a CUDA device is available**; otherwise defaults to optimized vectorized pandas or numpy.
+3. Saves all Excel files in **parallel using xlsxwriter**, ensuring that writing ~3M rows × 3–4 times finishes in under ~5 minutes on a modern 8-core CPU.
+4. Has these clean helper functions:
+   - `read_excel_parallel()`
+   - `transform_gpu_or_cpu(df)`
+   - `save_excel_parallel()`
+5. Wraps all multiprocessing logic inside `if __name__ == "__main__":` to ensure cross-platform compatibility.
+6. Adds `tqdm`-based progress bars for read and write stages.
+7. Prints a timing summary for each phase: read, transform, and save.
+8. Handles exceptions gracefully so one file's failure doesn’t block the rest.
+9. Uses only open-source packages: `pandas >= 2.2`, `concurrent.futures`, `xlsxwriter`, `tqdm`, `numba`, `cudf`, `cupy` (no commercial tools).
+10. Keeps all input/output logic and structure unchanged (same input paths and variable names).
+
+Now, rewrite the contents of `code.py` below to apply these optimizations:
+
+### BEGIN ORIGINAL code.py
