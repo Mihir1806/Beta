@@ -1,1 +1,143 @@
-date_sub(date_trunc('month', current_date()), 1)
+from flask import Flask, request, render_template_string
+import re
+
+app = Flask(__name__)
+
+# ─────────────────────────── HELPERS ─────────────────────────── #
+
+def convert_datetime_add(match: re.Match) -> str:
+    dt, val, unit = match.group(1), int(match.group(2)), match.group(3).lower()
+    if unit == "days":
+        return f"date_add({dt}, {val})" if val >= 0 else f"date_sub({dt}, {-val})"
+    elif unit == "months":
+        return f"add_months({dt}, {val})"
+    elif unit == "years":
+        return f"add_months({dt}, {val * 12})"
+    elif unit == "hours":
+        return f"{dt} + INTERVAL {val} HOURS"
+    elif unit == "minutes":
+        return f"{dt} + INTERVAL {val} MINUTES"
+    return f"{dt} /* + {val} {unit} (unsupported) */"
+
+def convert_conditionals(expr: str) -> str:
+    # IIF / IFF
+    expr = re.sub(r'\bI{1,2}F\s*\(\s*(.+?),\s*(.+?),\s*(.+?)\s*\)', r'CASE WHEN \1 THEN \2 ELSE \3 END', expr, flags=re.IGNORECASE)
+
+    # IF THEN ELSE ENDIF (handles nested as long as syntax is correct)
+    expr = re.sub(
+        r'\bIf\s+(.+?)\s+Then\s+(.+?)\s+Else\s+(.+?)\s+EndIf\b',
+        r'CASE WHEN \1 THEN \2 ELSE \3 END',
+        expr,
+        flags=re.IGNORECASE | re.DOTALL
+    )
+    return expr
+
+def convert_alteryx_to_spark(expr: str) -> str:
+    expr = expr.strip()
+
+    # 🧠 Predefined patterns for end-of-month logic
+    expr = re.sub(
+        r'DateTimeAdd\s*\(\s*DateTimeAdd\s*\(\s*DateTimeFormat\s*\(\s*(\[[\w_]+\])\s*,\s*"%Y-%m-01"\s*\)\s*,\s*1\s*,\s*"months"\s*\)\s*,\s*-1\s*,\s*"days"\s*\)',
+        r"date_sub(add_months(date_trunc('month', \1), 1), 1)",
+        expr,
+        flags=re.IGNORECASE
+    )
+    expr = re.sub(
+        r'DateTimeAdd\s*\(\s*DateTimeFirstOfMonth\s*\(\s*\)\s*,\s*-1\s*,\s*"days"\s*\)',
+        r"date_sub(date_trunc('month', current_date()), 1)",
+        expr, flags=re.IGNORECASE
+    )
+    expr = re.sub(
+        r'DateTimeAdd\s*\(\s*DateTimeFirstOfMonth\s*\(\s*([\[\]A-Za-z0-9_]+)\s*\)\s*,\s*-1\s*,\s*"days"\s*\)',
+        r"date_sub(date_trunc('month', \1), 1)",
+        expr, flags=re.IGNORECASE
+    )
+
+    # 🌙 General DateTimeFirstOfMonth
+    expr = re.sub(r'DateTimeFirstOfMonth\s*\(\s*\)', r"date_trunc('month', current_date())", expr, flags=re.IGNORECASE)
+    expr = re.sub(r'DateTimeFirstOfMonth\s*\(\s*([\[\]A-Za-z0-9_]+)\s*\)', r"date_trunc('month', \1)", expr, flags=re.IGNORECASE)
+
+    # 🔁 DateTimeAdd conversions
+    expr = re.sub(
+        r'DateTimeAdd\s*\(\s*([\[\]A-Za-z0-9_]+)\s*,\s*(-?\d+)\s*,\s*"([^"]+)"\s*\)',
+        convert_datetime_add,
+        expr,
+        flags=re.IGNORECASE
+    )
+
+    # 📐 String & utility functions
+    expr = re.sub(r'\bTrim\s*\(', 'TRIM(', expr, flags=re.IGNORECASE)
+    expr = re.sub(r'\bLen\s*\(', 'LENGTH(', expr, flags=re.IGNORECASE)
+    expr = re.sub(r'(?i)Contains\s*\(([^,]+),\s*([^)]+)\)', r'INSTR(\1, \2) > 0', expr)
+    expr = re.sub(r'(?i)Left\s*\(([^,]+),\s*([^)]+)\)', r'SUBSTRING(\1, 1, \2)', expr)
+    expr = re.sub(r'(?i)Right\s*\(([^,]+),\s*([^)]+)\)', r'SUBSTRING(\1, LENGTH(\1) - \2 + 1, \2)', expr)
+
+    # 🧠 Conditional handling
+    expr = convert_conditionals(expr)
+
+    return expr
+
+
+# ─────────────────────────── UI HTML ─────────────────────────── #
+
+HTML = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Alteryx ⇄ Spark SQL Converter</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
+    <style>
+        body { background:#1e1e2f;color:#eee;font-family:Arial;padding:30px }
+        h1 { text-align:center;color:#00cec9 }
+        .wrap { max-width:800px;margin:auto }
+        .CodeMirror { height:auto;background:#2d2d3a;color:#fff;font-size:15px }
+        textarea { display:block;width:100%;height:100px }
+        select,button { padding:9px 14px;font-size:15px;margin:10px 0 }
+        pre { background:#2e2e3f;padding:15px;border-radius:6px;white-space:pre-wrap }
+    </style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🧠 Alteryx ⇄ Spark SQL Converter</h1>
+  <form id="f" method="POST">
+      <label>Formula:</label>
+      <textarea id="in" name="input_formula">{{ input_formula }}</textarea>
+      <select name="direction">
+          <option value="alteryx_to_spark" {% if direction=='alteryx_to_spark' %}selected{% endif %}>Alteryx → Spark SQL</option>
+      </select>
+      <button type="submit">Convert</button>
+  </form>
+  {% if output_formula %}
+    <h3>Converted Formula:</h3>
+    <pre>{{ output_formula }}</pre>
+  {% endif %}
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/sql/sql.min.js"></script>
+<script>
+  const txt = document.getElementById('in');
+  const ed  = CodeMirror.fromTextArea(txt,{lineNumbers:true,mode:"sql",theme:"default"});
+  document.getElementById('f').addEventListener('submit', () => { txt.value = ed.getValue(); });
+</script>
+</body>
+</html>
+'''
+
+# ─────────────────────────── ROUTE ─────────────────────────── #
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    input_formula = output_formula = ''
+    direction = 'alteryx_to_spark'
+    if request.method == "POST":
+        input_formula = request.form.get("input_formula", "")
+        direction = request.form.get("direction", "alteryx_to_spark")
+        output_formula = convert_alteryx_to_spark(input_formula)
+    return render_template_string(HTML,
+                                  input_formula=input_formula,
+                                  output_formula=output_formula,
+                                  direction=direction)
+
+if __name__ == "__main__":
+    app.run(debug=True)
