@@ -5,6 +5,8 @@ from datetime import datetime
 app = Flask(__name__)
 app.secret_key = 'secret-key'
 
+# ---------- Converters ----------
+
 def convert_alteryx_to_spark(expr):
     expr = expr.strip()
     expr = re.sub(r'IIF\s*\(([^,]+),\s*([^,]+),\s*([^)]+)\)', r'CASE WHEN \1 THEN \2 ELSE \3 END', expr, flags=re.IGNORECASE)
@@ -59,6 +61,8 @@ def explain_formula(expr):
         explanation.append("🕒 Works with date and time values.")
     return "<br>".join(explanation) if explanation else "ℹ️ General formula using string/date functions."
 
+# ---------- HTML UI ----------
+
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
@@ -82,7 +86,7 @@ HTML_TEMPLATE = '''
 </head>
 <body>
     <h1>🧠 FormulaLab: Alteryx ⇄ Spark SQL</h1>
-    <form method="POST">
+    <form method="POST" id="formulaForm">
         <div class="editor"><textarea id="input_formula" name="input_formula">{{ input_formula }}</textarea></div>
         <br>
         <select name="direction">
@@ -106,7 +110,7 @@ HTML_TEMPLATE = '''
     {% endif %}
 
     <div class="library">
-        <h3>📚 Formula Library</h3>
+        <h3>📚 Formula Library (Examples)</h3>
         {% for label, example in library %}
             <div class="formula-box">
                 <b>{{ label }}:</b> <code>{{ example }}</code>
@@ -120,7 +124,7 @@ HTML_TEMPLATE = '''
     </div>
 
     <div class="history">
-        <h3>🕒 Recent Conversions</h3>
+        <h3>🕒 Conversion History</h3>
         {% for h in history %}
             <div class="formula-box"><code>{{ h }}</code></div>
         {% else %}
@@ -134,16 +138,22 @@ HTML_TEMPLATE = '''
         mode: "sql",
         theme: "default"
     });
+
+    // Ensure form submits editor value
+    document.getElementById("formulaForm").addEventListener("submit", function () {
+        document.getElementById("input_formula").value = editor.getValue();
+    });
+
     function copyToClipboard(id) {
-        let text = id === 'input_formula'
-            ? editor.getValue()
-            : document.getElementById(id).innerText;
+        let text = (id === 'input_formula') ? editor.getValue() : document.getElementById(id).innerText;
         navigator.clipboard.writeText(text).then(() => alert("Copied!"));
     }
 </script>
 </body>
 </html>
 '''
+
+# ---------- Flask Route ----------
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
@@ -182,6 +192,8 @@ def index():
         history=session.get('history', []),
         library=library
     )
+
+# ---------- Run App ----------
 
 if __name__ == '__main__':
     app.run(debug=True)
