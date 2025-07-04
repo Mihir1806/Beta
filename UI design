@@ -1,137 +1,71 @@
-from flask import Flask, request, render_template_string, session
-import re
-from datetime import datetime
+from flask import Flask, request, render_template_string
 
 app = Flask(__name__)
-app.secret_key = 'secret-key'
-
-# ---------- Converters ----------
 
 def convert_alteryx_to_spark(expr):
+    import re
     expr = expr.strip()
     expr = re.sub(r'IIF\s*\(([^,]+),\s*([^,]+),\s*([^)]+)\)', r'CASE WHEN \1 THEN \2 ELSE \3 END', expr, flags=re.IGNORECASE)
+    expr = re.sub(r'\bTrim\s*\(', 'TRIM(', expr, flags=re.IGNORECASE)
+    expr = re.sub(r'\bLen\s*\(', 'LENGTH(', expr, flags=re.IGNORECASE)
+    expr = re.sub(r'(?i)Contains\s*\(([^,]+),\s*([^)]+)\)', r'INSTR(\1, \2) > 0', expr)
+    expr = re.sub(r'(?i)Left\s*\(([^,]+),\s*([^)]+)\)', r'SUBSTRING(\1, 1, \2)', expr)
+    expr = re.sub(r'(?i)Right\s*\(([^,]+),\s*([^)]+)\)', r'SUBSTRING(\1, LENGTH(\1) - \2 + 1, \2)', expr)
     expr = expr.replace("ENDIF", "END")
-    expr = re.sub(r'\bIF\b', 'CASE WHEN', expr, flags=re.IGNORECASE)
-    expr = re.sub(r'\bTHEN\b', 'THEN', expr, flags=re.IGNORECASE)
-    expr = re.sub(r'\bELSE\b', 'ELSE', expr, flags=re.IGNORECASE)
-    replacements = {
-        r'(?i)\bTrim\s*\(': 'TRIM(',
-        r'\bLen\s*\(': 'LENGTH(',
-        r'\bUpper\s*\(': 'UPPER(',
-        r'\bLower\s*\(': 'LOWER(',
-        r'\bReplace\s*\(': 'REPLACE(',
-        r'(?i)Contains\s*\(([^,]+),\s*([^)]+)\)': r'INSTR(\1, \2) > 0',
-        r'(?i)Left\s*\(([^,]+),\s*([^)]+)\)': r'SUBSTRING(\1, 1, \2)',
-        r'(?i)Right\s*\(([^,]+),\s*([^)]+)\)': r'SUBSTRING(\1, LENGTH(\1) - \2 + 1, \2)',
-        r'(?i)DateTimeNow\s*\(\s*\)': 'CURRENT_TIMESTAMP',
-        r'(?i)DateTimeAdd\s*\(([^,]+),\s*([^,]+),\s*\'days\'\s*\)': r'DATE_ADD(\1, \2)',
-        r'(?i)DateTimeDiff\s*\(([^,]+),\s*([^,]+),\s*\'days\'\s*\)': r'DATEDIFF(\1, \2)'
-    }
-    for pat, repl in replacements.items():
-        expr = re.sub(pat, repl, expr)
-    return expr.strip()
+    return expr
 
 def convert_spark_to_alteryx(expr):
+    import re
     expr = expr.strip()
     expr = re.sub(r'CASE WHEN (.*?) THEN (.*?) ELSE (.*?) END', r'IIF(\1, \2, \3)', expr, flags=re.IGNORECASE)
-    expr = expr.replace('CURRENT_TIMESTAMP', 'DateTimeNow()')
-    expr = re.sub(r'DATE_ADD\((.*?),\s*(.*?)\)', r'DateTimeAdd(\1, \2, \'days\')', expr)
-    expr = re.sub(r'DATEDIFF\((.*?),\s*(.*?)\)', r'DateTimeDiff(\1, \2, \'days\')', expr)
-    expr = re.sub(r'INSTR\((.*?),\s*(.*?)\) > 0', r'Contains(\1, \2)', expr)
+    expr = re.sub(r'LENGTH\s*\(', 'Len(', expr, flags=re.IGNORECASE)
+    expr = re.sub(r'TRIM\s*\(', 'Trim(', expr, flags=re.IGNORECASE)
+    expr = re.sub(r'INSTR\s*\((.*?),\s*(.*?)\)\s*>\s*0', r'Contains(\1, \2)', expr, flags=re.IGNORECASE)
     expr = re.sub(r'SUBSTRING\((.*?),\s*1,\s*(.*?)\)', r'Left(\1, \2)', expr)
-    expr = re.sub(r'SUBSTRING\((.*?),\s*LENGTH\(\1\) - (.*?) \+ 1,\s*(.*?)\)', r'Right(\1, \3)', expr)
-    return expr.strip()
-
-def explain_formula(expr):
-    explanation = []
-    upper_expr = expr.upper()
-    if "IIF" in upper_expr or "IF" in upper_expr:
-        explanation.append("🧠 Conditional logic (IF/IIF) used to return values based on conditions.")
-    if "LEN" in upper_expr or "LENGTH" in upper_expr:
-        explanation.append("📏 Measures the number of characters in a string.")
-    if "TRIM" in upper_expr:
-        explanation.append("✂️ Trims whitespace from the beginning and end of a string.")
-    if "CONTAINS" in upper_expr or "INSTR" in upper_expr:
-        explanation.append("🔍 Checks if a string contains a specific substring.")
-    if "LEFT" in upper_expr:
-        explanation.append("⬅️ Extracts characters from the left of the string.")
-    if "RIGHT" in upper_expr:
-        explanation.append("➡️ Extracts characters from the right of the string.")
-    if "DATETIME" in upper_expr or "CURRENT_TIMESTAMP" in upper_expr:
-        explanation.append("🕒 Works with date and time values.")
-    return "<br>".join(explanation) if explanation else "ℹ️ General formula using string/date functions."
-
-# ---------- HTML UI ----------
+    expr = re.sub(r'SUBSTRING\((.*?),\s*LENGTH\(\1\) - (.*?) \+ 1,\s*\2\)', r'Right(\1, \2)', expr)
+    return expr
 
 HTML_TEMPLATE = '''
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
-    <title>FormulaLab</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/sql/sql.min.js"></script>
+    <title>Formula Converter</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
     <style>
-        body { background: #1e1e2f; color: #eee; font-family: sans-serif; padding: 30px; text-align: center; }
-        h1 { color: #00cec9; }
-        .editor { width: 80%; margin: auto; }
+        body { background: #1e1e2f; color: #eee; font-family: Arial, sans-serif; padding: 30px; }
+        .container { max-width: 800px; margin: auto; }
+        h1 { color: #00cec9; text-align: center; }
+        .CodeMirror { height: auto; border: 1px solid #ccc; background: #2e2e3e; color: white; }
+        select, button { padding: 10px; margin: 10px 0; font-size: 16px; }
+        .output-box { margin-top: 20px; background: #2d2d3a; padding: 15px; border-radius: 10px; }
+        .label { font-weight: bold; margin-top: 10px; display: block; }
         textarea { display: none; }
-        .CodeMirror { height: auto; background: #2e2e3e; color: #fff; font-size: 15px; }
-        button { padding: 10px 20px; background: #00b894; border: none; color: white; cursor: pointer; margin: 10px; }
-        select { padding: 6px; font-size: 15px; }
-        .output, .history, .library, .explanation { margin-top: 30px; padding: 20px; background: #2d2d3a; border-radius: 10px; width: 80%; margin-left: auto; margin-right: auto; }
-        .formula-box { text-align: left; margin-bottom: 10px; }
-        .formula-box code { color: #81ecec; }
     </style>
 </head>
 <body>
-    <h1>🧠 FormulaLab: Alteryx ⇄ Spark SQL</h1>
+<div class="container">
+    <h1>🧠 Alteryx ⇄ Spark SQL Formula Converter</h1>
     <form method="POST" id="formulaForm">
-        <div class="editor"><textarea id="input_formula" name="input_formula">{{ input_formula }}</textarea></div>
-        <br>
+        <label class="label">Enter Formula:</label>
+        <textarea id="input_formula" name="input_formula">{{ input_formula }}</textarea>
         <select name="direction">
-            <option value="alteryx_to_spark" {% if direction == 'alteryx_to_spark' %}selected{% endif %}>Alteryx → Spark SQL</option>
-            <option value="spark_to_alteryx" {% if direction == 'spark_to_alteryx' %}selected{% endif %}>Spark SQL → Alteryx</option>
+            <option value="alteryx_to_spark" {% if direction == "alteryx_to_spark" %}selected{% endif %}>Alteryx → Spark SQL</option>
+            <option value="spark_to_alteryx" {% if direction == "spark_to_alteryx" %}selected{% endif %}>Spark SQL → Alteryx</option>
         </select>
+        <br>
         <button type="submit">Convert</button>
     </form>
 
     {% if output_formula %}
-    <div class="output">
-        <h3>✨ Converted Formula:</h3>
-        <code id="outputFormula">{{ output_formula }}</code><br>
-        <button onclick="copyToClipboard('input_formula')">📋 Copy Input</button>
-        <button onclick="copyToClipboard('outputFormula')">📋 Copy Output</button>
-    </div>
-    <div class="explanation">
-        <h3>🧠 Formula Explanation:</h3>
-        <p>{{ explanation|safe }}</p>
+    <div class="output-box">
+        <label class="label">Converted Output:</label>
+        <pre>{{ output_formula }}</pre>
     </div>
     {% endif %}
+</div>
 
-    <div class="library">
-        <h3>📚 Formula Library (Examples)</h3>
-        {% for label, example in library %}
-            <div class="formula-box">
-                <b>{{ label }}:</b> <code>{{ example }}</code>
-                <form method="POST" style="display:inline;">
-                    <input type="hidden" name="input_formula" value="{{ example }}">
-                    <input type="hidden" name="direction" value="alteryx_to_spark">
-                    <button type="submit">Try</button>
-                </form>
-            </div>
-        {% endfor %}
-    </div>
-
-    <div class="history">
-        <h3>🕒 Conversion History</h3>
-        {% for h in history %}
-            <div class="formula-box"><code>{{ h }}</code></div>
-        {% else %}
-            <p>No history yet.</p>
-        {% endfor %}
-    </div>
-
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/sql/sql.min.js"></script>
 <script>
     let editor = CodeMirror.fromTextArea(document.getElementById("input_formula"), {
         lineNumbers: true,
@@ -139,61 +73,34 @@ HTML_TEMPLATE = '''
         theme: "default"
     });
 
-    // Ensure form submits editor value
     document.getElementById("formulaForm").addEventListener("submit", function () {
         document.getElementById("input_formula").value = editor.getValue();
     });
-
-    function copyToClipboard(id) {
-        let text = (id === 'input_formula') ? editor.getValue() : document.getElementById(id).innerText;
-        navigator.clipboard.writeText(text).then(() => alert("Copied!"));
-    }
 </script>
 </body>
 </html>
 '''
 
-# ---------- Flask Route ----------
-
-@app.route('/', methods=['GET', 'POST'])
+@app.route("/", methods=["GET", "POST"])
 def index():
-    output_formula = ""
     input_formula = ""
-    explanation = ""
+    output_formula = ""
     direction = "alteryx_to_spark"
 
-    if 'history' not in session:
-        session['history'] = []
-
-    if request.method == 'POST':
-        input_formula = request.form.get('input_formula', '').strip()
-        direction = request.form.get('direction', 'alteryx_to_spark')
-        output_formula = convert_alteryx_to_spark(input_formula) if direction == 'alteryx_to_spark' else convert_spark_to_alteryx(input_formula)
-        explanation = explain_formula(input_formula)
-        if input_formula:
-            timestamp = datetime.now().strftime('%H:%M:%S')
-            session['history'].insert(0, f"[{timestamp}] {direction}: {input_formula} → {output_formula}")
-            session.modified = True
-
-    library = [
-        ("Simple IF", 'IF [Sales] > 100 THEN "High" ELSE "Low" ENDIF'),
-        ("Nested IIF", 'IIF([Age]>18, "Adult", IIF([Age]>12, "Teen", "Child"))'),
-        ("Contains", 'Contains([Region], "East")'),
-        ("Date Add", "DateTimeAdd([Date], 5, 'days')"),
-        ("Length", "Len(Trim([Name]))"),
-    ]
+    if request.method == "POST":
+        input_formula = request.form.get("input_formula", "")
+        direction = request.form.get("direction", "alteryx_to_spark")
+        if direction == "alteryx_to_spark":
+            output_formula = convert_alteryx_to_spark(input_formula)
+        else:
+            output_formula = convert_spark_to_alteryx(input_formula)
 
     return render_template_string(
         HTML_TEMPLATE,
-        output_formula=output_formula,
         input_formula=input_formula,
-        direction=direction,
-        explanation=explanation,
-        history=session.get('history', []),
-        library=library
+        output_formula=output_formula,
+        direction=direction
     )
 
-# ---------- Run App ----------
-
-if __name__ == '__main__':
+if __name__ == "__main__":
     app.run(debug=True)
