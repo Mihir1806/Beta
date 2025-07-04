@@ -3,7 +3,7 @@ import re
 from datetime import datetime
 
 app = Flask(__name__)
-app.secret_key = 'supersecretkey'
+app.secret_key = 'secret-key'
 
 def convert_alteryx_to_spark(expr):
     expr = expr.strip()
@@ -12,7 +12,6 @@ def convert_alteryx_to_spark(expr):
     expr = re.sub(r'\bIF\b', 'CASE WHEN', expr, flags=re.IGNORECASE)
     expr = re.sub(r'\bTHEN\b', 'THEN', expr, flags=re.IGNORECASE)
     expr = re.sub(r'\bELSE\b', 'ELSE', expr, flags=re.IGNORECASE)
-
     replacements = {
         r'(?i)\bTrim\s*\(': 'TRIM(',
         r'\bLen\s*\(': 'LENGTH(',
@@ -43,21 +42,22 @@ def convert_spark_to_alteryx(expr):
 
 def explain_formula(expr):
     explanation = []
-    if "IIF" in expr.upper() or "IF" in expr.upper():
-        explanation.append("🧠 Conditional logic is used to choose between values.")
-    if "LEN" in expr.upper() or "LENGTH" in expr.upper():
+    upper_expr = expr.upper()
+    if "IIF" in upper_expr or "IF" in upper_expr:
+        explanation.append("🧠 Conditional logic (IF/IIF) used to return values based on conditions.")
+    if "LEN" in upper_expr or "LENGTH" in upper_expr:
         explanation.append("📏 Measures the number of characters in a string.")
-    if "TRIM" in expr.upper():
-        explanation.append("✂️ Removes extra spaces from the start and end of a string.")
-    if "CONTAINS" in expr.upper() or "INSTR" in expr.upper():
-        explanation.append("🔍 Checks if one string contains another.")
-    if "LEFT" in expr.upper():
-        explanation.append("⬅️ Extracts a number of characters from the start of a string.")
-    if "RIGHT" in expr.upper():
-        explanation.append("➡️ Extracts a number of characters from the end of a string.")
-    if "DATETIME" in expr.upper() or "CURRENT_TIMESTAMP" in expr.upper():
-        explanation.append("🕒 Performs operations with date and time.")
-    return "<br>".join(explanation) if explanation else "ℹ️ General expression with functions and conditions."
+    if "TRIM" in upper_expr:
+        explanation.append("✂️ Trims whitespace from the beginning and end of a string.")
+    if "CONTAINS" in upper_expr or "INSTR" in upper_expr:
+        explanation.append("🔍 Checks if a string contains a specific substring.")
+    if "LEFT" in upper_expr:
+        explanation.append("⬅️ Extracts characters from the left of the string.")
+    if "RIGHT" in upper_expr:
+        explanation.append("➡️ Extracts characters from the right of the string.")
+    if "DATETIME" in upper_expr or "CURRENT_TIMESTAMP" in upper_expr:
+        explanation.append("🕒 Works with date and time values.")
+    return "<br>".join(explanation) if explanation else "ℹ️ General formula using string/date functions."
 
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
@@ -122,9 +122,7 @@ HTML_TEMPLATE = '''
     <div class="history">
         <h3>🕒 Recent Conversions</h3>
         {% for h in history %}
-            <div class="formula-box">
-                <code>{{ h }}</code>
-            </div>
+            <div class="formula-box"><code>{{ h }}</code></div>
         {% else %}
             <p>No history yet.</p>
         {% endfor %}
@@ -136,7 +134,6 @@ HTML_TEMPLATE = '''
         mode: "sql",
         theme: "default"
     });
-
     function copyToClipboard(id) {
         let text = id === 'input_formula'
             ? editor.getValue()
@@ -161,18 +158,11 @@ def index():
     if request.method == 'POST':
         input_formula = request.form.get('input_formula', '').strip()
         direction = request.form.get('direction', 'alteryx_to_spark')
-
-        if direction == 'alteryx_to_spark':
-            output_formula = convert_alteryx_to_spark(input_formula)
-        else:
-            output_formula = convert_spark_to_alteryx(input_formula)
-
+        output_formula = convert_alteryx_to_spark(input_formula) if direction == 'alteryx_to_spark' else convert_spark_to_alteryx(input_formula)
         explanation = explain_formula(input_formula)
-
         if input_formula:
             timestamp = datetime.now().strftime('%H:%M:%S')
-            entry = f"[{timestamp}] {direction}: {input_formula} → {output_formula}"
-            session['history'].insert(0, entry)
+            session['history'].insert(0, f"[{timestamp}] {direction}: {input_formula} → {output_formula}")
             session.modified = True
 
     library = [
@@ -188,9 +178,9 @@ def index():
         output_formula=output_formula,
         input_formula=input_formula,
         direction=direction,
-        library=library,
+        explanation=explanation,
         history=session.get('history', []),
-        explanation=explanation
+        library=library
     )
 
 if __name__ == '__main__':
