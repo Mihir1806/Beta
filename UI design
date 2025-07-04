@@ -1,1 +1,123 @@
-date_sub(add_months(date_trunc('month', Max_DateTime_Out), 1), 1)
+from flask import Flask, request, render_template_string
+import re
+
+app = Flask(__name__)
+
+def convert_alteryx_to_spark(expr):
+    expr = expr.strip()
+
+    # Handle nested DateTimeFormat → DateTimeAdd for end-of-month pattern
+    expr = re.sub(
+        r'DateTimeAdd\s*\(\s*DateTimeAdd\s*\(\s*DateTimeFormat\s*\(\s*([\[\]a-zA-Z0-9_]+)\s*,\s*"%Y-%m-01"\s*\)\s*,\s*1\s*,\s*"months"\s*\)\s*,\s*-1\s*,\s*"days"\s*\)',
+        r"date_sub(add_months(date_trunc('month', \1), 1), 1)",
+        expr,
+        flags=re.IGNORECASE
+    )
+
+    # Regular function mappings
+    expr = re.sub(r'IIF\s*\(([^,]+),\s*([^,]+),\s*([^)]+)\)', r'CASE WHEN \1 THEN \2 ELSE \3 END', expr, flags=re.IGNORECASE)
+    expr = expr.replace("ENDIF", "END")
+    expr = re.sub(r'\bTrim\s*\(', 'TRIM(', expr, flags=re.IGNORECASE)
+    expr = re.sub(r'\bLen\s*\(', 'LENGTH(', expr, flags=re.IGNORECASE)
+    expr = re.sub(r'(?i)Contains\s*\(([^,]+),\s*([^)]+)\)', r'INSTR(\1, \2) > 0', expr)
+    expr = re.sub(r'(?i)Left\s*\(([^,]+),\s*([^)]+)\)', r'SUBSTRING(\1, 1, \2)', expr)
+    expr = re.sub(r'(?i)Right\s*\(([^,]+),\s*([^)]+)\)', r'SUBSTRING(\1, LENGTH(\1) - \2 + 1, \2)', expr)
+    return expr
+
+def convert_spark_to_alteryx(expr):
+    expr = expr.strip()
+
+    # Reverse nested EOM pattern
+    expr = re.sub(
+        r"date_sub\s*\(\s*add_months\s*\(\s*date_trunc\s*\(\s*'month'\s*,\s*([\[\]a-zA-Z0-9_]+)\)\s*,\s*1\s*\)\s*,\s*1\s*\)",
+        r'DateTimeAdd(DateTimeAdd(DateTimeFormat(\1,"%Y-%m-01"), 1, "months"), -1, "days")',
+        expr,
+        flags=re.IGNORECASE
+    )
+
+    expr = re.sub(r'CASE WHEN (.*?) THEN (.*?) ELSE (.*?) END', r'IIF(\1, \2, \3)', expr, flags=re.IGNORECASE)
+    expr = re.sub(r'LENGTH\s*\(', 'Len(', expr, flags=re.IGNORECASE)
+    expr = re.sub(r'TRIM\s*\(', 'Trim(', expr, flags=re.IGNORECASE)
+    expr = re.sub(r'INSTR\s*\((.*?),\s*(.*?)\)\s*>\s*0', r'Contains(\1, \2)', expr, flags=re.IGNORECASE)
+    expr = re.sub(r'SUBSTRING\((.*?),\s*1,\s*(.*?)\)', r'Left(\1, \2)', expr)
+    expr = re.sub(r'SUBSTRING\((.*?),\s*LENGTH\(\1\) - (.*?) \+ 1,\s*\2\)', r'Right(\1, \2)', expr)
+    return expr
+
+HTML = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Formula Converter</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
+    <style>
+        body { background: #1e1e2f; color: #eee; font-family: sans-serif; padding: 30px; }
+        h1 { text-align: center; color: #00cec9; }
+        .container { max-width: 800px; margin: auto; }
+        .CodeMirror { height: auto; background: #2d2d3a; color: #fff; font-size: 16px; }
+        textarea { display: block; width: 100%; height: 100px; }
+        select, button { padding: 10px; font-size: 16px; margin: 10px 0; }
+        pre { background: #2e2e3f; padding: 15px; border-radius: 5px; white-space: pre-wrap; }
+        .output-box { margin-top: 30px; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🧠 Alteryx ⇄ Spark SQL Formula Converter</h1>
+    <form method="POST" id="formulaForm">
+        <label for="input_formula">Type your formula below:</label>
+        <textarea id="input_formula" name="input_formula">{{ input_formula }}</textarea>
+        <select name="direction">
+            <option value="alteryx_to_spark" {% if direction == 'alteryx_to_spark' %}selected{% endif %}>Alteryx → Spark SQL</option>
+            <option value="spark_to_alteryx" {% if direction == 'spark_to_alteryx' %}selected{% endif %}>Spark SQL → Alteryx</option>
+        </select>
+        <br>
+        <button type="submit">Convert</button>
+    </form>
+
+    {% if output_formula %}
+    <div class="output-box">
+        <h3>Converted Formula:</h3>
+        <pre>{{ output_formula }}</pre>
+    </div>
+    {% endif %}
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/sql/sql.min.js"></script>
+<script>
+    const textarea = document.getElementById("input_formula");
+    const editor = CodeMirror.fromTextArea(textarea, {
+        lineNumbers: true,
+        mode: "sql",
+        theme: "default"
+    });
+
+    document.getElementById("formulaForm").addEventListener("submit", function () {
+        textarea.value = editor.getValue();
+    });
+</script>
+</body>
+</html>
+'''
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    input_formula = ""
+    output_formula = ""
+    direction = "alteryx_to_spark"
+
+    if request.method == "POST":
+        input_formula = request.form.get("input_formula", "")
+        direction = request.form.get("direction", "alteryx_to_spark")
+        if direction == "alteryx_to_spark":
+            output_formula = convert_alteryx_to_spark(input_formula)
+        else:
+            output_formula = convert_spark_to_alteryx(input_formula)
+
+    return render_template_string(HTML,
+                                  input_formula=input_formula,
+                                  output_formula=output_formula,
+                                  direction=direction)
+
+if __name__ == "__main__":
+    app.run(debug=True)
