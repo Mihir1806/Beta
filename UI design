@@ -25,32 +25,32 @@ def convert_spark_to_alteryx(expr):
     expr = re.sub(r'SUBSTRING\((.*?),\s*LENGTH\(\1\) - (.*?) \+ 1,\s*\2\)', r'Right(\1, \2)', expr)
     return expr
 
-HTML_TEMPLATE = '''
-<!doctype html>
+HTML = '''
+<!DOCTYPE html>
 <html>
 <head>
     <title>Formula Converter</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
     <style>
-        body { background: #1e1e2f; color: #eee; font-family: Arial, sans-serif; padding: 30px; }
+        body { background: #1e1e2f; color: #eee; font-family: sans-serif; padding: 30px; }
+        h1 { text-align: center; color: #00cec9; }
         .container { max-width: 800px; margin: auto; }
-        h1 { color: #00cec9; text-align: center; }
-        .CodeMirror { height: auto; border: 1px solid #ccc; background: #2e2e3e; color: white; }
-        select, button { padding: 10px; margin: 10px 0; font-size: 16px; }
-        .output-box { margin-top: 20px; background: #2d2d3a; padding: 15px; border-radius: 10px; }
-        .label { font-weight: bold; margin-top: 10px; display: block; }
-        textarea { display: none; }
+        .CodeMirror { height: auto; background: #2d2d3a; color: #fff; font-size: 16px; }
+        textarea { display: block; width: 100%; height: 100px; }
+        select, button { padding: 10px; font-size: 16px; margin: 10px 0; }
+        pre { background: #2e2e3f; padding: 15px; border-radius: 5px; white-space: pre-wrap; }
+        .output-box { margin-top: 30px; }
     </style>
 </head>
 <body>
 <div class="container">
     <h1>🧠 Alteryx ⇄ Spark SQL Formula Converter</h1>
     <form method="POST" id="formulaForm">
-        <label class="label">Enter Formula:</label>
+        <label for="input_formula">Type your formula below:</label>
         <textarea id="input_formula" name="input_formula">{{ input_formula }}</textarea>
         <select name="direction">
-            <option value="alteryx_to_spark" {% if direction == "alteryx_to_spark" %}selected{% endif %}>Alteryx → Spark SQL</option>
-            <option value="spark_to_alteryx" {% if direction == "spark_to_alteryx" %}selected{% endif %}>Spark SQL → Alteryx</option>
+            <option value="alteryx_to_spark" {% if direction == 'alteryx_to_spark' %}selected{% endif %}>Alteryx → Spark SQL</option>
+            <option value="spark_to_alteryx" {% if direction == 'spark_to_alteryx' %}selected{% endif %}>Spark SQL → Alteryx</option>
         </select>
         <br>
         <button type="submit">Convert</button>
@@ -58,7 +58,7 @@ HTML_TEMPLATE = '''
 
     {% if output_formula %}
     <div class="output-box">
-        <label class="label">Converted Output:</label>
+        <h3>Converted Formula:</h3>
         <pre>{{ output_formula }}</pre>
     </div>
     {% endif %}
@@ -67,14 +67,15 @@ HTML_TEMPLATE = '''
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/sql/sql.min.js"></script>
 <script>
-    let editor = CodeMirror.fromTextArea(document.getElementById("input_formula"), {
+    const textarea = document.getElementById("input_formula");
+    const editor = CodeMirror.fromTextArea(textarea, {
         lineNumbers: true,
         mode: "sql",
         theme: "default"
     });
 
     document.getElementById("formulaForm").addEventListener("submit", function () {
-        document.getElementById("input_formula").value = editor.getValue();
+        textarea.value = editor.getValue();
     });
 </script>
 </body>
@@ -95,12 +96,10 @@ def index():
         else:
             output_formula = convert_spark_to_alteryx(input_formula)
 
-    return render_template_string(
-        HTML_TEMPLATE,
-        input_formula=input_formula,
-        output_formula=output_formula,
-        direction=direction
-    )
+    return render_template_string(HTML,
+                                  input_formula=input_formula,
+                                  output_formula=output_formula,
+                                  direction=direction)
 
 if __name__ == "__main__":
     app.run(debug=True)
