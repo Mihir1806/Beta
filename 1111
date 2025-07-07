@@ -1,20 +1,96 @@
+from flask import Flask, request, render_template_string
+import re
 
-I have a Python script that reads and processes multiple Excel files using a for loop. Inside the loop, the script performs several operations including:
-	•	Conditional logic using if-else
-	•	Parent-child hierarchy resolution
-	•	Lookups and mapping (similar to VLOOKUP or dictionary-based matching)
-	•	Data merging, filtering, and transformation
+app = Flask(__name__)
 
-The current implementation works correctly but is slow when handling many or large Excel files.
+# ─── helpers ──────────────────────────────────────────────────────────────
+def _spark_fmt(fmt: str) -> str:
+    for src, tgt in {
+        "%Y": "yyyy", "%y": "yy", "%m": "MM", "%d": "dd",
+        "%H": "HH",   "%M": "mm", "%S": "ss"
+    }.items():
+        fmt = fmt.replace(src, tgt)
+    return fmt
 
-Please optimize the script for speed and memory efficiency without changing its logic or output.
+def _dt_add(date_expr: str, n: int, unit: str) -> str:
+    unit = unit.lower()
+    if unit.startswith("day"):
+        return f"date_add({date_expr}, {n})" if n >= 0 else f"date_sub({date_expr}, {-n})"
+    if unit.startswith("month"):
+        return f"add_months({date_expr}, {n})"
+    if unit.startswith("year"):
+        return f"add_months({date_expr}, {n*12})"
+    return date_expr  # hours/minutes not covered
 
-Requirements:
-	•	Preserve all existing functionality and logic exactly as is.
-	•	Optimize performance by:
-	•	Avoiding repeated pd.concat inside loops
-	•	Using efficient pandas/vectorized operations where possible
-	•	Applying parallel processing (ThreadPoolExecutor, joblib, etc.) to read files
-	•	Keep using Excel files (do not convert to CSV or other formats)
-	•	Add clear comments explaining performance improvements
-	•	Output clean and optimized Python code that produces the same final result
+# ─── core convert ─────────────────────────────────────────────────────────
+def convert(expr: str) -> str:
+    expr = expr.strip()
+    prev = None
+    while expr != prev:
+        prev = expr
+
+        # DateTimeNow / Today
+        expr = re.sub(r'DateTimeNow\(\)', "current_timestamp()", expr, flags=re.I)
+        expr = re.sub(r'DateTimeToday\(\)', "current_date()", expr, flags=re.I)
+
+        # DateTimeFirstOfMonth
+        expr = re.sub(r'DateTimeFirstOfMonth\(\)', "date_trunc('month', current_date())", expr, flags=re.I)
+        expr = re.sub(r'DateTimeFirstOfMonth\(\s*([^)]+?)\s*\)', r"date_trunc('month', \1)", expr, flags=re.I)
+
+        # DateTimeFormat
+        expr = re.sub(
+            r'DateTimeFormat\(\s*([^\s,]+?)\s*,\s*"([^"]+)"\s*\)',
+            lambda m: f"date_format({m.group(1)}, '{_spark_fmt(m.group(2))}')",
+            expr, flags=re.I)
+
+        # DateTimeAdd
+        expr = re.sub(
+            r'DateTimeAdd\(\s*([^,]+?)\s*,\s*(-?\d+)\s*,\s*["\'](days|months|years)["\']\s*\)',
+            lambda m: _dt_add(m.group(1), int(m.group(2)), m.group(3)),
+            expr, flags=re.I)
+
+        # Cond. logic
+        expr = re.sub(r'\bI{1,2}F{1,2}\(\s*([^,]+?)\s*,\s*([^,]+?)\s*,\s*([^)]+?)\)',
+                      r'CASE WHEN \1 THEN \2 ELSE \3 END', expr, flags=re.I)
+        expr = re.sub(r'\bIf\s+(.+?)\s+Then\s+(.+?)\s+Else\s+(.+?)\s+EndIf\b',
+                      r'CASE WHEN \1 THEN \2 ELSE \3 END', expr, flags=re.I|re.S)
+
+        # String helpers
+        expr = re.sub(r'\bTrim\(\s*([^)]+?)\)', r'TRIM(\1)', expr, flags=re.I)
+        expr = re.sub(r'\bLen\(\s*([^)]+?)\)',  r'LENGTH(\1)', expr, flags=re.I)
+        expr = re.sub(r'\bLeft\(\s*([^,]+?)\s*,\s*([^)]+?)\)', r'SUBSTRING(\1, 1, \2)', expr, flags=re.I)
+        expr = re.sub(r'\bRight\(\s*([^,]+?)\s*,\s*([^)]+?)\)',r'SUBSTRING(\1, LENGTH(\1)-\2+1, \2)', expr, flags=re.I)
+        expr = re.sub(r'Contains\(\s*([^,]+?)\s*,\s*([^)]+?)\)', r'INSTR(\1, \2) > 0', expr, flags=re.I)
+    return expr
+
+# ─── flask ui ─────────────────────────────────────────────────────────────
+HTML = '''
+<!doctype html><html><head>
+<title>Alteryx ⇄ Spark SQL</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
+<style>body{background:#1e1e2f;color:#eee;font-family:Arial;padding:40px}
+.wrap{max-width:900px;margin:auto}h1{text-align:center;color:#00f0ff}
+textarea,pre{width:100%;background:#2d2d3a;color:#fff;border:1px solid #444;padding:10px;font-size:16px;border-radius:6px}
+button{padding:10px 20px;font-size:16px;background:#00cec9;border:none;margin-top:10px;cursor:pointer}</style>
+</head><body><div class="wrap">
+<h1>🧠 Alteryx ⇄ Spark SQL Converter</h1>
+<form method="POST"><textarea id="in" name="formula" rows="4">{{ f|e }}</textarea>
+<button type="submit">Convert</button></form>{% if r %}<h3>Converted:</h3><pre>{{ r|e }}</pre>{% endif %}
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/sql/sql.min.js"></script>
+<script>const ta=document.getElementById("in");
+CodeMirror.fromTextArea(ta,{lineNumbers:true,mode:"sql",theme:"default"});
+</script></body></html>
+'''
+
+@app.route('/', methods=['GET','POST'])
+def home():
+    inp=out=''
+    if request.method=='POST':
+        inp=request.form.get('formula','')
+        out=convert(inp)
+    return render_template_string(HTML, f=inp, r=out)
+
+if __name__=='__main__':
+    app.run(debug=True)
