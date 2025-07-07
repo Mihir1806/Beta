@@ -1,18 +1,135 @@
-Develop a Python function parent_child(self) that determines whether a given SubProductIAS code is a child of a given Type of operation code based on a hierarchical level mapping defined in a table called SubProduct.
+from flask import Flask, request, render_template_string
+import re
 
-⸻
+app = Flask(__name__)
 
-📥 Inputs:
+# ----------- DATE FORMAT CONVERTER ----------- #
+def convert_date_format(fmt):
+    mappings = {
+        "%Y": "yyyy", "%y": "yy", "%m": "MM", "%d": "dd",
+        "%H": "HH", "%M": "mm", "%S": "ss"
+    }
+    for k, v in mappings.items():
+        fmt = fmt.replace(k, v)
+    return fmt
 
-1. self.SubProduct (Hierarchy Table)
-	•	A DataFrame containing the hierarchical relationship of codes.
-	•	Contains the following columns:
-	•	Code: Unique code identifier (e.g., G00000, X05000).
-	•	Niv 1 to Niv 6: Hierarchy levels. Each code appears only once in one of the Niv levels.
-	•	One and only one Niv column is non-null for each Code.
+# ----------- CONVERTER ----------- #
+def convert_formula(expr):
+    prev_expr = None
+    while expr != prev_expr:
+        prev_expr = expr
 
-2. self.result3 (Code Pairing Table)
-	•	A DataFrame containing two columns:
-	•	SubProductIAS: The child code.
-	•	Type of operation: The potential parent code.
-	•	These codes are to be checked against the hierarchy in self.SubProduct.
+        # Handle DateTimeFirstOfMonth()
+        expr = re.sub(r'DateTimeFirstOfMonth\s*\(\s*\)', "date_trunc('month', current_date())", expr, flags=re.I)
+
+        # Handle DateTimeFirstOfMonth([field])
+        expr = re.sub(r'DateTimeFirstOfMonth\s*\(\s*([^)]+?)\s*\)',
+                      r"date_trunc('month', \1)", expr, flags=re.I)
+
+        # Handle DateTimeFormat(date, "format")
+        expr = re.sub(r'DateTimeFormat\s*\(\s*([^\s,]+)\s*,\s*"([^"]+)"\s*\)',
+                      lambda m: f"date_format({m.group(1)}, '{convert_date_format(m.group(2))}')",
+                      expr, flags=re.I)
+
+        # Handle DateTimeNow()
+        expr = re.sub(r'DateTimeNow\s*\(\s*\)', "current_timestamp()", expr, flags=re.I)
+
+        # Handle DateTimeToday()
+        expr = re.sub(r'DateTimeToday\s*\(\s*\)', "current_date()", expr, flags=re.I)
+
+        # Handle DateTimeAdd(date, number, 'unit')
+        expr = re.sub(r'DateTimeAdd\s*\(\s*([^,]+?)\s*,\s*(-?\d+)\s*,\s*["\'](days|months|years)["\']\s*\)',
+                      lambda m: handle_datetime_add(m.group(1), m.group(2), m.group(3)),
+                      expr, flags=re.I)
+
+        # Handle nested Left([field], n)
+        expr = re.sub(r'Left\s*\(\s*([^,]+?)\s*,\s*([^)]+?)\s*\)', r"SUBSTRING(\1, 1, \2)", expr, flags=re.I)
+
+        # Handle nested Right([field], n)
+        expr = re.sub(r'Right\s*\(\s*([^,]+?)\s*,\s*([^)]+?)\s*\)',
+                      r"SUBSTRING(\1, LENGTH(\1)-\2+1, \2)", expr, flags=re.I)
+
+        # Handle Trim
+        expr = re.sub(r'\bTrim\s*\(\s*([^)]+?)\)', r'TRIM(\1)', expr, flags=re.I)
+
+        # Handle Contains(a, b)
+        expr = re.sub(r'Contains\s*\(\s*([^,]+)\s*,\s*([^)]+)\)', r'INSTR(\1, \2) > 0', expr, flags=re.I)
+
+        # Handle IIF and IF logic
+        expr = re.sub(r'I{1,2}F{1,2}\s*\(\s*([^,]+?)\s*,\s*([^,]+?)\s*,\s*([^)]+?)\s*\)',
+                      r'CASE WHEN \1 THEN \2 ELSE \3 END', expr, flags=re.I)
+
+    # Add TODO marker for unknown functions
+    expr = re.sub(r'\b([A-Za-z_]\w*)\s*\(', lambda m: (
+        m.group(1).upper() + '(' if m.group(1).lower() in ["trim", "left", "right", "substring", "instr",
+                                                           "date_add", "date_sub", "add_months", "date_trunc",
+                                                           "current_date", "current_timestamp", "date_format"]
+        else m.group(0).rstrip("(") + " /* TODO */("
+    ), expr)
+
+    return expr
+
+# ----------- DATETIMEADD HANDLER ----------- #
+def handle_datetime_add(date_expr, num, unit):
+    num = int(num)
+    unit = unit.lower()
+    if unit == 'days':
+        return f"date_add({date_expr}, {num})" if num >= 0 else f"date_sub({date_expr}, {abs(num)})"
+    elif unit == 'months':
+        return f"add_months({date_expr}, {num})"
+    elif unit == 'years':
+        return f"add_months({date_expr}, {num * 12})"
+    else:
+        return f"{date_expr} /* TODO add {num} {unit} */"
+
+# ----------- HTML FRONTEND ----------- #
+HTML = '''
+<!doctype html>
+<html>
+<head>
+    <title>Alteryx ⇌ Spark SQL Converter</title>
+    <link rel="stylesheet" 
+        href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
+    <style>
+        body { background:#1e1e2f; color:#eee; font-family:sans-serif; padding:40px }
+        .wrap { max-width:900px; margin:auto }
+        h1 { color:#00f0ff; text-align:center }
+        textarea, pre { width:100%; background:#2d2d3a; color:#fff; border:1px solid #444; padding:10px; font-size:16px }
+        button { padding:10px 20px; font-size:16px; background:#00cec9; border:none; margin-top:10px }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <h1>🧠 Alteryx ⇌ Spark SQL Formula Converter</h1>
+    <form method="POST">
+        <textarea id="input" name="formula" rows="4" placeholder="Type Alteryx formula here...">{{ formula|e }}</textarea>
+        <button type="submit">Convert</button>
+    </form>
+    {% if result %}
+        <h3>Converted:</h3>
+        <pre id="output">{{ result|e }}</pre>
+    {% endif %}
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/sql/sql.min.js"></script>
+<script>
+    CodeMirror.fromTextArea(document.getElementById("input"), {
+        lineNumbers: true, mode: "sql", theme: "default"
+    });
+</script>
+</body>
+</html>
+'''
+
+# ----------- FLASK ROUTE ----------- #
+@app.route("/", methods=["GET", "POST"])
+def index():
+    formula = result = ""
+    if request.method == "POST":
+        formula = request.form.get("formula", "")
+        result = convert_formula(formula)
+    return render_template_string(HTML, formula=formula, result=result)
+
+# ----------- RUN APP ----------- #
+if __name__ == "__main__":
+    app.run(debug=True)
