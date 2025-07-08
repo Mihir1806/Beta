@@ -3,94 +3,113 @@ import re
 
 app = Flask(__name__)
 
-# ─── helpers ──────────────────────────────────────────────────────────────
-def _spark_fmt(fmt: str) -> str:
-    for src, tgt in {
-        "%Y": "yyyy", "%y": "yy", "%m": "MM", "%d": "dd",
-        "%H": "HH",   "%M": "mm", "%S": "ss"
-    }.items():
-        fmt = fmt.replace(src, tgt)
+# ─────────────────────────────── maps ─────────────────────────────── #
+FMT_MAP = {"%Y":"yyyy","%y":"yy","%m":"MM","%d":"dd",
+           "%H":"HH","%M":"mm","%S":"ss"}
+
+SIMPLE_RENAMES = {
+    "trim":"TRIM", "len":"LENGTH",
+    "upper":"UPPER", "lower":"LOWER"
+}
+
+# ─────────────────────────── utilities ────────────────────────────── #
+def spark_fmt(fmt: str) -> str:
+    for k, v in FMT_MAP.items():
+        fmt = fmt.replace(k, v)
     return fmt
 
-def _dt_add(date_expr: str, n: int, unit: str) -> str:
+def dt_add(expr: str, n: int, unit: str) -> str:
     unit = unit.lower()
     if unit.startswith("day"):
-        return f"date_add({date_expr}, {n})" if n >= 0 else f"date_sub({date_expr}, {-n})"
+        return f"date_add({expr}, {n})" if n >= 0 else f"date_sub({expr}, {-n})"
     if unit.startswith("month"):
-        return f"add_months({date_expr}, {n})"
+        return f"add_months({expr}, {n})"
     if unit.startswith("year"):
-        return f"add_months({date_expr}, {n*12})"
-    return date_expr  # hours/minutes not covered
+        return f"add_months({expr}, {n * 12})"
+    return expr  # hours/minutes not handled for Spark SQL safe subset
 
-# ─── core convert ─────────────────────────────────────────────────────────
-def convert(expr: str) -> str:
-    expr = expr.strip()
-    prev = None
-    while expr != prev:
-        prev = expr
+# balanced-arg chunk for nested DateTimeAdd
+ARG = r'(?:[^(),]|\([^()]*\))+?'
+dt_add_rx = re.compile(
+    rf'DateTimeAdd\(\s*({ARG})\s*,\s*(-?\d+)\s*,\s*[\'"](days|months|years)[\'"]\s*\)',
+    flags=re.I)
 
-        # DateTimeNow / Today
-        expr = re.sub(r'DateTimeNow\(\)', "current_timestamp()", expr, flags=re.I)
-        expr = re.sub(r'DateTimeToday\(\)', "current_date()", expr, flags=re.I)
+# ─────────────────────── main converter ───────────────────────────── #
+def convert(formula: str) -> str:
+    s = formula.strip()
 
-        # DateTimeFirstOfMonth
-        expr = re.sub(r'DateTimeFirstOfMonth\(\)', "date_trunc('month', current_date())", expr, flags=re.I)
-        expr = re.sub(r'DateTimeFirstOfMonth\(\s*([^)]+?)\s*\)', r"date_trunc('month', \1)", expr, flags=re.I)
+    # direct renames first
+    for alx, spark in SIMPLE_RENAMES.items():
+        s = re.sub(rf'\b{alx}\s*\(', f"{spark}(", s, flags=re.I)
 
-        # DateTimeFormat
-        expr = re.sub(
-            r'DateTimeFormat\(\s*([^\s,]+?)\s*,\s*"([^"]+)"\s*\)',
-            lambda m: f"date_format({m.group(1)}, '{_spark_fmt(m.group(2))}')",
-            expr, flags=re.I)
+    # constant replacements
+    s = re.sub(r'DateTimeNow\(\)',  "current_timestamp()", s, flags=re.I)
+    s = re.sub(r'DateTimeToday\(\)',"current_date()",      s, flags=re.I)
 
-        # DateTimeAdd
-        expr = re.sub(
-            r'DateTimeAdd\(\s*([^,]+?)\s*,\s*(-?\d+)\s*,\s*["\'](days|months|years)["\']\s*\)',
-            lambda m: _dt_add(m.group(1), int(m.group(2)), m.group(3)),
-            expr, flags=re.I)
+    # DateTimeFirstOfMonth
+    s = re.sub(r'DateTimeFirstOfMonth\(\)', "date_trunc('month', current_date())", s, flags=re.I)
+    s = re.sub(r'DateTimeFirstOfMonth\(\s*([^)]+?)\s*\)', r"date_trunc('month', \1)", s, flags=re.I)
 
-        # Cond. logic
-        expr = re.sub(r'\bI{1,2}F{1,2}\(\s*([^,]+?)\s*,\s*([^,]+?)\s*,\s*([^)]+?)\)',
-                      r'CASE WHEN \1 THEN \2 ELSE \3 END', expr, flags=re.I)
-        expr = re.sub(r'\bIf\s+(.+?)\s+Then\s+(.+?)\s+Else\s+(.+?)\s+EndIf\b',
-                      r'CASE WHEN \1 THEN \2 ELSE \3 END', expr, flags=re.I|re.S)
+    # DateTimeFormat
+    s = re.sub(
+        r'DateTimeFormat\(\s*([^\s,]+?)\s*,\s*"([^"]+)"\s*\)',
+        lambda m: f"date_format({m.group(1)}, '{spark_fmt(m.group(2))}')",
+        s, flags=re.I)
 
-        # String helpers
-        expr = re.sub(r'\bTrim\(\s*([^)]+?)\)', r'TRIM(\1)', expr, flags=re.I)
-        expr = re.sub(r'\bLen\(\s*([^)]+?)\)',  r'LENGTH(\1)', expr, flags=re.I)
-        expr = re.sub(r'\bLeft\(\s*([^,]+?)\s*,\s*([^)]+?)\)', r'SUBSTRING(\1, 1, \2)', expr, flags=re.I)
-        expr = re.sub(r'\bRight\(\s*([^,]+?)\s*,\s*([^)]+?)\)',r'SUBSTRING(\1, LENGTH(\1)-\2+1, \2)', expr, flags=re.I)
-        expr = re.sub(r'Contains\(\s*([^,]+?)\s*,\s*([^)]+?)\)', r'INSTR(\1, \2) > 0', expr, flags=re.I)
-    return expr
+    # recursive DateTimeAdd
+    while True:
+        m = dt_add_rx.search(s)
+        if not m:
+            break
+        inner = convert(m.group(1))  # recurse
+        s = s[:m.start()] + dt_add(inner, int(m.group(2)), m.group(3)) + s[m.end():]
 
-# ─── flask ui ─────────────────────────────────────────────────────────────
+    # Contains / Left / Right after recursion
+    s = re.sub(r'Contains\(\s*([^,]+?)\s*,\s*([^)]+?)\)', r'INSTR(\1,\2) > 0', s, flags=re.I)
+    s = re.sub(r'Left\(\s*([^,]+?)\s*,\s*([^)]+?)\)', r'SUBSTRING(\1,1,\2)', s, flags=re.I)
+    s = re.sub(r'Right\(\s*([^,]+?)\s*,\s*([^)]+?)\)', r'SUBSTRING(\1,LENGTH(\1)-\2+1,\2)', s, flags=re.I)
+
+    # Conditional logic
+    cond_rx = re.compile(r'\bI{1,2}F{1,2}\(\s*([^,]+?),\s*([^,]+?),\s*([^)]+?)\)', flags=re.I)
+    while cond_rx.search(s):
+        s = cond_rx.sub(r'CASE WHEN \1 THEN \2 ELSE \3 END', s)
+    s = re.sub(r'\bIf\s+(.+?)\s+Then\s+(.+?)\s+Else\s+(.+?)\s+EndIf\b',
+               r'CASE WHEN \1 THEN \2 ELSE \3 END', s, flags=re.I|re.S)
+
+    return s
+
+# ─────────────────────────── Flask UI ────────────────────────────── #
 HTML = '''
-<!doctype html><html><head>
-<title>Alteryx ⇄ Spark SQL</title>
+<!doctype html><html><head><title>Alteryx⇄Spark</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
-<style>body{background:#1e1e2f;color:#eee;font-family:Arial;padding:40px}
+<style>
+body{background:#1b1b2b;color:#eee;font:16px/1.4 Arial;padding:40px}
 .wrap{max-width:900px;margin:auto}h1{text-align:center;color:#00f0ff}
-textarea,pre{width:100%;background:#2d2d3a;color:#fff;border:1px solid #444;padding:10px;font-size:16px;border-radius:6px}
-button{padding:10px 20px;font-size:16px;background:#00cec9;border:none;margin-top:10px;cursor:pointer}</style>
-</head><body><div class="wrap">
+textarea,pre{width:100%;background:#2b2b39;color:#fff;border:1px solid #444;
+padding:12px;border-radius:6px;font-size:15px}
+button{padding:10px 20px;font-size:16px;background:#00cec9;border:none;margin-top:12px;cursor:pointer}
+</style></head><body><div class="wrap">
 <h1>🧠 Alteryx ⇄ Spark SQL Converter</h1>
-<form method="POST"><textarea id="in" name="formula" rows="4">{{ f|e }}</textarea>
-<button type="submit">Convert</button></form>{% if r %}<h3>Converted:</h3><pre>{{ r|e }}</pre>{% endif %}
-</div>
+<form method="POST"><textarea id="txt" name="formula" rows="4">{{ inp|e }}</textarea>
+<button type="submit">Convert</button></form>
+{% if out %}<h3>Converted:</h3><pre>{{ out }}</pre>{% endif %}</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/sql/sql.min.js"></script>
-<script>const ta=document.getElementById("in");
-CodeMirror.fromTextArea(ta,{lineNumbers:true,mode:"sql",theme:"default"});
+<script>
+let ed = CodeMirror.fromTextArea(document.getElementById('txt'),
+{lineNumbers:true,mode:'sql',theme:'default'});
+document.querySelector('form').addEventListener('submit',
+  ()=>{document.getElementById('txt').value=ed.getValue();});
 </script></body></html>
 '''
 
 @app.route('/', methods=['GET','POST'])
-def home():
-    inp=out=''
-    if request.method=='POST':
-        inp=request.form.get('formula','')
-        out=convert(inp)
-    return render_template_string(HTML, f=inp, r=out)
+def index():
+    inp = out = ""
+    if request.method == 'POST':
+        inp = request.form.get('formula','')
+        out = convert(inp)
+    return render_template_string(HTML, inp=inp, out=out)
 
-if __name__=='__main__':
+if __name__ == "__main__":
     app.run(debug=True)
