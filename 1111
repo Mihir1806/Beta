@@ -1,16 +1,23 @@
+# formula_lab.py
+# ──────────────────────────────────────────────────────────────────────────────
+#  One-file Flask app that converts Alteryx formulas → Spark-SQL equivalents.
+#  – Supports nested DateTimeAdd / DateTimeDiff / DateTimeFormat / FirstOfMonth
+#  – Handles %-style date-formats  → Spark date_format symbols
+#  – Converts Trim, Len, Left, Right, Contains
+#  – Converts IF…THEN…ELSE…ENDIF   and IIF / IFF
+#  – UI: dark theme, CodeMirror editor, copy-to-clipboard buttons
+# ──────────────────────────────────────────────────────────────────────────────
 from flask import Flask, request, render_template_string
-import re
+import re, html
 
 app = Flask(__name__)
 
-# ────────────────────────── format helpers ──────────────────────────
-_STRF_TO_SPARK = {
-    "%Y": "yyyy", "%y": "yy", "%m": "MM", "%d": "dd",
-    "%H": "HH",   "%M": "mm", "%S": "ss"
-}
+# ─── helpers ──────────────────────────────────────────────────────────────
+FMT_MAP = {"%Y":"yyyy", "%y":"yy", "%m":"MM", "%d":"dd",
+           "%H":"HH",   "%M":"mm", "%S":"ss"}
 
 def to_spark_fmt(fmt: str) -> str:
-    for k, v in _STRF_TO_SPARK.items():
+    for k,v in FMT_MAP.items():
         fmt = fmt.replace(k, v)
     return fmt
 
@@ -21,8 +28,8 @@ def spark_dt_add(expr: str, n: int, unit: str) -> str:
     if u.startswith("month"):
         return f"add_months({expr}, {n})"
     if u.startswith("year"):
-        return f"add_months({expr}, {n * 12})"
-    return expr  # hours/minutes not implemented for Spark safely
+        return f"add_months({expr}, {n*12})"
+    return expr
 
 def spark_dt_diff(a: str, b: str, unit: str) -> str:
     u = unit.lower()
@@ -34,97 +41,90 @@ def spark_dt_diff(a: str, b: str, unit: str) -> str:
         return f"(MONTHS_BETWEEN({a}, {b})/12)"
     return f"DATEDIFF({a}, {b})"
 
-# ───────────────────────────── regexes ──────────────────────────────
-BAL_ARG = r'(?:[^(),]|\([^()]*\))+?'  # balanced arg (quick & safe)
-RX_ADD  = re.compile(
-    rf'DateTimeAdd\(\s*({BAL_ARG})\s*,\s*(-?\d+)\s*,\s*[\'"](days|months|years)[\'"]\s*\)',
-    flags=re.I)
-RX_DIFF = re.compile(
-    rf'DateTimeDiff\(\s*({BAL_ARG})\s*,\s*({BAL_ARG})\s*,\s*[\'"](days|months|years)[\'"]\s*\)',
-    flags=re.I)
+# balanced first-argument matcher for DateTimeAdd/Diff
+ARG = r'(?:[^(),]+|\((?:[^()]*|\([^()]*\))*\))+?'
+RX_ADD  = re.compile(rf'DateTimeAdd\(\s*({ARG})\s*,\s*(-?\d+)\s*,\s*[\'"](days|months|years)[\'"]\s*\)', re.I)
+RX_DIFF = re.compile(rf'DateTimeDiff\(\s*({ARG})\s*,\s*({ARG})\s*,\s*[\'"](days|months|years)[\'"]\s*\)', re.I)
 
-# ───────────────────── conversion function (recursive) ──────────────
-def convert(expr: str) -> str:
-    txt = expr.strip()
+# ─── main converter (recursive) ───────────────────────────────────────────
+def convert(formula: str) -> str:
+    s = formula.strip()
 
-    # 1 ─ replace constants & simple renames first
-    txt = re.sub(r'DateTimeNow\(\)',  'current_timestamp()', txt, flags=re.I)
-    txt = re.sub(r'DateTimeToday\(\)', 'current_date()',     txt, flags=re.I)
-    txt = re.sub(r'DateTimeFirstOfMonth\(\)', "date_trunc('month', current_date())", txt, flags=re.I)
-    txt = re.sub(r'DateTimeFirstOfMonth\(\s*([^)]+?)\s*\)', r"date_trunc('month', \1)", txt, flags=re.I)
+    # constants & simple renames
+    s = re.sub(r'DateTimeNow\(\)',  'current_timestamp()', s, flags=re.I)
+    s = re.sub(r'DateTimeToday\(\)', 'current_date()',     s, flags=re.I)
+    s = re.sub(r'DateTimeFirstOfMonth\(\)', "date_trunc('month', current_date())", s, flags=re.I)
+    s = re.sub(r'DateTimeFirstOfMonth\(\s*([^)]+?)\s*\)', r"date_trunc('month', \1)", s, flags=re.I)
+    s = re.sub(r'\bTrim\s*\(\s*([^)]+?)\)',  r'TRIM(\1)',   s, flags=re.I)
+    s = re.sub(r'\bLen\s*\(\s*([^)]+?)\)',   r'LENGTH(\1)', s, flags=re.I)
 
-    # Trim / Len
-    txt = re.sub(r'\bTrim\s*\(\s*([^)]+?)\)',  r'TRIM(\1)',   txt, flags=re.I)
-    txt = re.sub(r'\bLen\s*\(\s*([^)]+?)\)',   r'LENGTH(\1)', txt, flags=re.I)
+    # DateTimeFormat
+    s = re.sub(
+        r'DateTimeFormat\(\s*([^\s,]+?)\s*,\s*[\'"]([^\'"]+)[\'"]\s*\)',
+        lambda m: f"date_format({m.group(1).strip('`\"')}, '{to_spark_fmt(m.group(2))}')",
+        s, flags=re.I)
 
-    # 2 ─ DateTimeFormat
-    txt = re.sub(
-        r'DateTimeFormat\(\s*([^\s,]+?)\s*,\s*"([^"]+)"\s*\)',
-        lambda m: f"date_format({m.group(1)}, '{to_spark_fmt(m.group(2))}')",
-        txt, flags=re.I)
-
-    # 3 ─ Recursive DateTimeAdd / DateTimeDiff
+    # recursive DateTimeAdd / DateTimeDiff
     while True:
-        m_add = RX_ADD.search(txt)
-        m_diff = RX_DIFF.search(txt)
+        m_add  = RX_ADD.search(s)
+        m_diff = RX_DIFF.search(s)
         if not m_add and not m_diff:
             break
         if m_add and (not m_diff or m_add.start() < m_diff.start()):
             inner = convert(m_add.group(1))
-            txt = txt.replace(m_add.group(0),
-                              spark_dt_add(inner, int(m_add.group(2)), m_add.group(3)), 1)
+            s = s[:m_add.start()]+spark_dt_add(inner,int(m_add.group(2)),m_add.group(3))+s[m_add.end():]
         else:
-            a = convert(m_diff.group(1))
-            b = convert(m_diff.group(2))
-            txt = txt.replace(m_diff.group(0),
-                              spark_dt_diff(a, b, m_diff.group(3)), 1)
+            a = convert(m_diff.group(1)); b = convert(m_diff.group(2))
+            s = s[:m_diff.start()]+spark_dt_diff(a,b,m_diff.group(3))+s[m_diff.end():]
 
-    # 4 ─ String helpers & Contains
-    txt = re.sub(r'I{1,2}F{1,2}\(\s*([^,]+?),\s*([^,]+?),\s*([^)]+?)\)',
-                 r'CASE WHEN \1 THEN \2 ELSE \3 END', txt, flags=re.I)
+    # string helpers post recursion
+    s = re.sub(r'Contains$begin:math:text$\\s*([^,]+?)\\s*,\\s*([^)]+?)$end:math:text$', r'INSTR(\1,\2) > 0', s, flags=re.I)
+    s = re.sub(r'\bLeft$begin:math:text$\\s*([^,]+?)\\s*,\\s*([^)]+?)$end:math:text$',  r'SUBSTRING(\1,1,\2)', s, flags=re.I)
+    s = re.sub(r'\bRight$begin:math:text$\\s*([^,]+?)\\s*,\\s*([^)]+?)$end:math:text$',
+               r'SUBSTRING(\1,LENGTH(\1)-\2+1,\2)', s, flags=re.I)
 
-    txt = re.sub(r'\bIf\s+(.+?)\s+Then\s+(.+?)\s+Else\s+(.+?)\s+EndIf\b',
-                 r'CASE WHEN \1 THEN \2 ELSE \3 END', txt, flags=re.I|re.S)
+    # conditionals (loop to capture nested)
+    while True:
+        new = re.sub(r'\bI{1,2}F{1,2}$begin:math:text$\\s*([^,]+?),\\s*([^,]+?),\\s*([^)]+?)$end:math:text$',
+                     r'CASE WHEN \1 THEN \2 ELSE \3 END', s, flags=re.I)
+        new = re.sub(r'\bIf\s+(.+?)\s+Then\s+(.+?)\s+Else\s+(.+?)\s+EndIf\b',
+                     r'CASE WHEN \1 THEN \2 ELSE \3 END', new, flags=re.I|re.S)
+        if new == s: break
+        s = new
+    return s
 
-    txt = re.sub(r'Contains\(\s*([^,]+?)\s*,\s*([^)]+?)\)', r'INSTR(\1,\2) > 0', txt, flags=re.I)
-    txt = re.sub(r'\bLeft\(\s*([^,]+?)\s*,\s*([^)]+?)\)',  r'SUBSTRING(\1,1,\2)', txt, flags=re.I)
-    txt = re.sub(r'\bRight\(\s*([^,]+?)\s*,\s*([^)]+?)\)',
-                 r'SUBSTRING(\1,LENGTH(\1)-\2+1,\2)', txt, flags=re.I)
-
-    return txt
-
-# ────────────────────────  Flask UI  ───────────────────────────────
+# ─── Flask UI ───────────────────────────────────────────────────────────
 HTML = '''
-<!doctype html><html><head><title>Alteryx⇄Spark SQL</title>
+<!doctype html><html><head><title>Alteryx⇄Spark</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
 <style>
-body{background:#181826;color:#eee;font-family:Arial;padding:40px}
+body{background:#171722;color:#eee;font:16px/1.4 Arial;padding:40px}
 .wrap{max-width:900px;margin:auto}h1{text-align:center;color:#00e0ff}
-textarea,pre{width:100%;background:#27273a;color:#fff;border:1px solid #555;
-padding:12px;border-radius:6px;font-size:15px}
-button{padding:10px 24px;font-size:16px;background:#00ceb8;border:none;margin-top:12px;cursor:pointer}
+textarea,pre{width:100%;background:#262636;color:#fff;border:1px solid #444;padding:12px;
+border-radius:6px;font-size:15px}button{padding:10px 24px;font-size:16px;background:#00c9b8;
+border:none;margin-top:12px;cursor:pointer}
 </style></head><body><div class="wrap">
 <h1>🧠 Alteryx ⇄ Spark SQL Converter</h1>
 <form method="POST"><textarea id="code" name="formula" rows="4">{{ src|e }}</textarea>
-<button type="submit">Convert</button></form>{% if out %}
-<h3>Converted:</h3><pre>{{ out }}</pre>{% endif %}
-</div>
+<button type="submit">Convert</button></form>{% if res %}<h3>Converted:</h3><pre id="out">{{ res }}</pre>
+<button onclick="copyToClipboard('out')">Copy</button>{% endif %}</div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/sql/sql.min.js"></script>
 <script>
 const ed=CodeMirror.fromTextArea(document.getElementById('code'),
-  {lineNumbers:true,mode:'sql',theme:'default'});
+ {lineNumbers:true,mode:"sql",theme:"default"});
 document.querySelector('form').addEventListener('submit',()=>{document.getElementById('code').value=ed.getValue();});
+function copyToClipboard(id){navigator.clipboard.writeText(document.getElementById(id).innerText);}
 </script></body></html>
 '''
 
 @app.route("/", methods=["GET","POST"])
-def root():
-    src = out = ""
+def main():
+    src = res = ""
     if request.method == "POST":
-        src = request.form.get("formula","")
-        out = convert(src)
-    return render_template_string(HTML, src=src, out=out)
+        src = request.form.get("formula", "")
+        res = convert(src)
+    return render_template_string(HTML, src=src, res=res)
 
 if __name__ == "__main__":
     app.run(debug=True)
