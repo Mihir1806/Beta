@@ -3,117 +3,109 @@ import re
 
 app = Flask(__name__)
 
-def convert_alteryx_to_sql(formula: str) -> str:
-    # Normalize smart quotes
-    formula = formula.replace('‘', "'").replace('’', "'").replace('“', '"').replace('”', '"')
-    
-    # Remove multiline comments
-    formula = re.sub(r'/\*.*?\*/', '', formula, flags=re.DOTALL)
-
-    # Break into lines and clean
-    lines = [line.strip() for line in formula.strip().split('\n') if line.strip()]
-    sql_lines = []
-    case_stack = []
-
-    for line in lines:
-        upper = line.upper()
-
-        # Handle IF...ELSEIF...ELSE...ENDIF
-        if upper.startswith("IF "):
-            condition = re.sub(r'^IF\s+', '', line, flags=re.I).rstrip("THEN").strip()
-            sql_lines.append("CASE")
-            sql_lines.append(f"    WHEN {condition} THEN")
-            case_stack.append("CASE")
-        elif upper.startswith("ELSEIF "):
-            condition = re.sub(r'^ELSEIF\s+', '', line, flags=re.I).rstrip("THEN").strip()
-            sql_lines.append(f"    WHEN {condition} THEN")
-        elif upper.startswith("ELSE"):
-            sql_lines.append("    ELSE")
-        elif upper.startswith("ENDIF"):
-            if case_stack:
-                sql_lines.append("END")
-                case_stack.pop()
-        else:
-            if sql_lines and any(kw in sql_lines[-1] for kw in ["THEN", "ELSE"]):
-                sql_lines[-1] += f" '{line}'"
-            else:
-                sql_lines.append(line)
-
-    sql = '\n'.join(sql_lines)
-
-    # Common Alteryx function replacements
-    patterns = [
-        (r'\bToNumber\s*\((.*?)\)', r'CAST(\1 AS FLOAT)'),
-        (r'\bToString\s*\((.*?)\)', r'CAST(\1 AS VARCHAR)'),
-        (r'\bDateTimeNow\s*\(\)', r'CURRENT_TIMESTAMP'),
-        (r'\bDateTimeToday\s*\(\)', r'CAST(CURRENT_DATE AS TIMESTAMP)'),
-        (r'\bDateTimeAdd\s*\(\s*(.+?),\s*(.+?),\s*"(.*?)"\s*\)', r'DATEADD(\3, \2, \1)'),
-        (r'\bDateTimeDiff\s*\(\s*(.+?),\s*(.+?),\s*"(.*?)"\s*\)', r'DATEDIFF(\3, \1, \2)'),
-        (r'\bDateTimeFormat\s*\(\s*(.+?),\s*"(.*?)"\s*\)', r"FORMAT(\1, '\2')"),
-        (r'\bDateTimeParse\s*\(\s*(.+?),\s*"(.*?)"\s*\)', r"CAST(\1 AS TIMESTAMP)"),
-    ]
-
-    for pattern, replacement in patterns:
-        sql = re.sub(pattern, replacement, sql, flags=re.IGNORECASE)
-
-    return sql.strip()
-
-# Full HTML UI
+# ---------------- HTML FRONTEND -------------------
 HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Alteryx to SQL Converter</title>
+    <title>Alteryx → Spark SQL Formula Converter</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        body { font-family: Consolas, monospace; background: #111; color: #eee; padding: 20px; }
-        h1 { color: #0f0; }
-        textarea, pre {
-            width: 100%; padding: 10px; background: #222; color: #0f0;
-            border: 1px solid #555; font-family: Consolas, monospace;
-            margin-top: 10px; resize: vertical;
-        }
-        button {
-            background-color: #0f0; color: #000; padding: 10px 20px;
-            border: none; cursor: pointer; font-weight: bold; margin-top: 10px;
-        }
-        button:hover { background-color: #5f5; }
-        .output { margin-top: 20px; }
-        .error { color: #f33; font-weight: bold; }
+        body { background-color: #121212; color: white; }
+        .form-control, .btn { border-radius: 0; }
+        .container { max-width: 800px; margin-top: 50px; }
+        textarea, pre { background-color: #1e1e1e; color: #00ffcc; }
     </style>
 </head>
 <body>
-    <h1>🔄 Alteryx Formula → SQL Converter</h1>
-    <form method="post">
-        <label>Paste your Alteryx Formula below:</label><br>
-        <textarea name="formula" rows="10">{{ formula or '' }}</textarea><br>
-        <button type="submit">Convert</button>
-    </form>
+    <div class="container">
+        <h2 class="mb-4">🔁 Alteryx ➜ Spark SQL Converter</h2>
+        <form method="post">
+            <div class="mb-3">
+                <label class="form-label">Enter Alteryx Formula:</label>
+                <textarea class="form-control" name="alteryx_formula" rows="5">{{ alteryx_formula or '' }}</textarea>
+            </div>
+            <button type="submit" class="btn btn-success">Convert</button>
+        </form>
 
-    {% if error %}
-        <div class="error">Error: {{ error }}</div>
-    {% endif %}
-
-    {% if result %}
-    <div class="output">
-        <h2>✅ Converted SQL:</h2>
-        <pre>{{ result }}</pre>
+        {% if spark_sql %}
+        <div class="mt-4">
+            <h4>✅ Converted Spark SQL:</h4>
+            <pre>{{ spark_sql }}</pre>
+        </div>
+        {% endif %}
     </div>
-    {% endif %}
 </body>
 </html>
 """
 
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    formula = request.form.get('formula', '')
-    result = ''
-    error = ''
-    if formula:
-        try:
-            result = convert_alteryx_to_sql(formula)
-        except Exception as e:
-            error = str(e)
-    return render_template_string(HTML_TEMPLATE, formula=formula, result=result, error=error)
+# ------------------ LOGIC ------------------------
 
-if __name__ == '__main__':
+def convert_to_spark_sql(alteryx_expr):
+    expr = alteryx_expr
+
+    # Normalize quotes and spacing
+    expr = expr.replace("‘", "'").replace("’", "'").replace("“", '"').replace("”", '"')
+    expr = expr.replace(" THEN ", " then ").replace(" ELSEIF ", " elseif ").replace(" ELSE ", " else ")
+
+    # Replace functions
+    expr = re.sub(r"\bToNumber\((.*?)\)", r"CAST(\1 AS DOUBLE)", expr, flags=re.IGNORECASE)
+    expr = re.sub(r"\bToDate\((.*?)\)", r"TO_DATE(\1)", expr, flags=re.IGNORECASE)
+    expr = re.sub(r"\bDateTimeFormat\((.*?),\s*['\"](.*?)['\"]\)", r"DATE_FORMAT(\1, '\2')", expr, flags=re.IGNORECASE)
+    expr = re.sub(r"\bIIF\((.*?),\s*(.*?),\s*(.*?)\)", r"CASE WHEN \1 THEN \2 ELSE \3 END", expr, flags=re.IGNORECASE)
+
+    # Replace Alteryx IF/ELSEIF/ELSE logic
+    def convert_if_block(expr):
+        expr = expr.strip()
+        if not expr.upper().startswith("IF"):
+            return expr
+
+        # Handle nested conditions
+        expr = expr.replace("ENDIF", "")
+        lines = expr.splitlines()
+        spark_lines = []
+        for line in lines:
+            line = line.strip()
+            if line.upper().startswith("IF "):
+                condition = line[3:].split(" THEN ")[0]
+                result = line.split(" THEN ")[1]
+                spark_lines.append(f"CASE WHEN {condition} THEN {result}")
+            elif line.upper().startswith("ELSEIF "):
+                condition = line[7:].split(" THEN ")[0]
+                result = line.split(" THEN ")[1]
+                spark_lines.append(f"WHEN {condition} THEN {result}")
+            elif line.upper().startswith("ELSE "):
+                result = line[5:]
+                spark_lines.append(f"ELSE {result}")
+            elif line.upper() == "ENDIF":
+                continue
+            else:
+                spark_lines.append(line)
+        spark_lines.append("END")
+        return "\n".join(spark_lines)
+
+    expr = convert_if_block(expr)
+
+    # Replace brackets [Column] with Column
+    expr = re.sub(r"\[([^\]]+)\]", r"\1", expr)
+
+    # Clean up spacing
+    expr = re.sub(r"\s{2,}", " ", expr).strip()
+
+    return expr
+
+# ---------------- ROUTE ------------------
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    spark_sql = None
+    alteryx_formula = None
+    if request.method == "POST":
+        alteryx_formula = request.form.get("alteryx_formula", "")
+        spark_sql = convert_to_spark_sql(alteryx_formula)
+    return render_template_string(HTML_TEMPLATE, alteryx_formula=alteryx_formula, spark_sql=spark_sql)
+
+# ---------------- RUN ------------------
+
+if __name__ == "__main__":
     app.run(debug=True)
