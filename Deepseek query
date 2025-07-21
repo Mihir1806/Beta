@@ -1,104 +1,37 @@
-from flask import Flask, request, render_template_string
-import re
-
-app = Flask(__name__)
-
-HTML = '''
-<!doctype html>
-<title>Alteryx to SparkSQL Converter</title>
-<h2>Alteryx to Spark SQL Converter</h2>
-<form method="post">
-  <label>Enter Alteryx Formula:</label><br>
-  <textarea name="alteryx_formula" rows="8" cols="80">{{ alteryx_formula or '' }}</textarea><br><br>
-  <input type="submit" value="Convert to Spark SQL">
-</form>
-{% if spark_sql %}
-<hr>
-<h3>Spark SQL Output:</h3>
-<pre>{{ spark_sql }}</pre>
-{% endif %}
-'''
-
-def convert_alteryx_to_sparksql(formula):
-    # Handle ToNumber('col')
-    formula = re.sub(r'ToNumber\s*\(\s*["\']?(\w+)["\']?\s*\)', r'CAST(\1 AS DOUBLE)', formula, flags=re.IGNORECASE)
-
-    # Handle ToString([col])
-    formula = re.sub(r'ToString\s*\(\s*[\[\(]?["\']?(\w+)["\']?[\]\)]?\s*\)', r'CAST(\1 AS STRING)', formula, flags=re.IGNORECASE)
-
-    # Handle ToDate('col')
-    formula = re.sub(r'ToDate\s*\(\s*["\']?(\w+)["\']?\s*\)', r'TO_DATE(\1)', formula, flags=re.IGNORECASE)
-
-    # Handle DateTimeFormat([col], "%d%m%Y")
-    formula = re.sub(r'DateTimeFormat\s*\(\s*\[?(\w+)\]?\s*,\s*["\'](.*?)["\']\s*\)',
-                     lambda m: f"DATE_FORMAT({m.group(1)}, '{convert_datetime_format(m.group(2))}')", 
-                     formula, flags=re.IGNORECASE)
-
-    # Replace IIF(condition, true_val, false_val)
-    formula = re.sub(r'IIF\s*\(([^,]+),\s*([^,]+),\s*([^)]+)\)', 
-                     r'CASE WHEN \1 THEN \2 ELSE \3 END', formula, flags=re.IGNORECASE)
-
-    # Convert IF...ELSEIF...ELSE...ENDIF to CASE WHEN
-    formula = convert_if_else_to_case(formula)
-
-    # Replace Contains([col], "text") with LIKE
-    formula = re.sub(r'Contains\s*\(\s*\[?(\w+)\]?\s*,\s*["\'](.*?)["\']\s*\)', 
-                     r"\1 LIKE '%\2%'", formula, flags=re.IGNORECASE)
-
-    # Replace IsNull([col])
-    formula = re.sub(r'IsNull\s*\(\s*\[?(\w+)\]?\s*\)', r'\1 IS NULL', formula, flags=re.IGNORECASE)
-
-    # Replace In([col], "a", "b") with IN ('a','b')
-    formula = re.sub(r'In\s*\(\s*\[?(\w+)\]?\s*,\s*([^\)]+)\)', 
-                     lambda m: f"{m.group(1)} IN ({', '.join(map(lambda x: x.strip().replace('\"', '\'').replace('[', '').replace(']', ''), m.group(2).split(',')))})",
-                     formula, flags=re.IGNORECASE)
-
-    # Replace brackets
-    formula = formula.replace('[', '').replace(']', '')
-    
-    return formula.strip()
-
-def convert_datetime_format(alteryx_fmt):
-    # Mapping Alteryx date tokens to Spark format
-    mappings = {
-        '%d': 'dd', '%m': 'MM', '%Y': 'uuuu', '%y': 'yy',
-        '%H': 'HH', '%I': 'hh', '%M': 'mm', '%S': 'ss',
-        '%p': 'a'
-    }
-    for k, v in mappings.items():
-        alteryx_fmt = alteryx_fmt.replace(k, v)
-    return alteryx_fmt
-
 def convert_if_else_to_case(formula):
     lines = formula.strip().split('\n')
     case_lines = []
-    in_if_block = False
+    in_case = False
+
     for line in lines:
         line = line.strip()
-        if line.upper().startswith('IF '):
+        upper_line = line.upper()
+
+        if upper_line.startswith('IF '):
             condition = line[3:].strip().rstrip('THEN').strip()
             case_lines.append(f'CASE WHEN {condition} THEN')
-            in_if_block = True
-        elif line.upper().startswith('ELSEIF '):
+            in_case = True
+
+        elif upper_line.startswith('ELSEIF '):
             condition = line[7:].strip().rstrip('THEN').strip()
             case_lines.append(f'WHEN {condition} THEN')
-        elif line.upper().startswith('ELSE'):
+
+        elif upper_line.startswith('ELSE'):
             case_lines.append('ELSE')
-        elif line.upper().startswith('ENDIF'):
+
+        elif upper_line.startswith('ENDIF'):
             case_lines.append('END')
-            in_if_block = False
-        else:
-            case_lines[-1] += f" '{line}'"
+            in_case = False
+
+        elif in_case:
+            # Add result for THEN or ELSE line (previous WHEN or ELSE should exist)
+            if len(case_lines) > 0 and (
+                case_lines[-1].startswith('CASE WHEN') or 
+                case_lines[-1].startswith('WHEN') or 
+                case_lines[-1] == 'ELSE'):
+                case_lines[-1] += f" '{line}'"
+            else:
+                # malformed structure, skip or raise warning
+                pass
+
     return '\n'.join(case_lines)
-
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    spark_sql = ''
-    alteryx_formula = ''
-    if request.method == 'POST':
-        alteryx_formula = request.form['alteryx_formula']
-        spark_sql = convert_alteryx_to_sparksql(alteryx_formula)
-    return render_template_string(HTML, alteryx_formula=alteryx_formula, spark_sql=spark_sql)
-
-if __name__ == '__main__':
-    app.run(debug=True)
