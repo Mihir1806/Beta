@@ -1,87 +1,104 @@
-import os, math, pandas as pd
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from tqdm import tqdm                 #  ← progress bars
+from flask import Flask, request, render_template_string
+import re
 
-# ────────────────────────────────────────────────────────────────────────────────
-def save_df_to_excel_fast(self, df, filename, show_progress=True):
-    """
-    Save *df* to <output_dir>/<filename> (.xlsx) using xlsxwriter, splitting
-    into new sheets once 70 % of Excel’s row limit is hit.  Shows a per-file
-    progress bar if *show_progress* is True.
-    """
-    MAX_ROWS = 1_048_576
-    ROWS_PER_SHEET = int(MAX_ROWS * 0.70)
+app = Flask(__name__)
 
-    output_path  = os.path.join(self.output_dir, filename)
-    total_rows   = len(df)
-    sheet_count  = math.ceil(total_rows / ROWS_PER_SHEET)
+HTML = '''
+<!doctype html>
+<title>Alteryx to SparkSQL Converter</title>
+<h2>Alteryx to Spark SQL Converter</h2>
+<form method="post">
+  <label>Enter Alteryx Formula:</label><br>
+  <textarea name="alteryx_formula" rows="8" cols="80">{{ alteryx_formula or '' }}</textarea><br><br>
+  <input type="submit" value="Convert to Spark SQL">
+</form>
+{% if spark_sql %}
+<hr>
+<h3>Spark SQL Output:</h3>
+<pre>{{ spark_sql }}</pre>
+{% endif %}
+'''
 
-    bar = tqdm(
-        total=sheet_count,
-        desc=f"Saving {filename}",
-        unit="sheet",
-        leave=False,
-        disable=not show_progress,
-    )
+def convert_alteryx_to_sparksql(formula):
+    # Handle ToNumber('col')
+    formula = re.sub(r'ToNumber\s*\(\s*["\']?(\w+)["\']?\s*\)', r'CAST(\1 AS DOUBLE)', formula, flags=re.IGNORECASE)
 
-    try:
-        with pd.ExcelWriter(
-            output_path,
-            engine="xlsxwriter",
-            options={"constant_memory": True},
-        ) as writer:
-            for i in range(sheet_count):
-                start, end = i * ROWS_PER_SHEET, min((i + 1) * ROWS_PER_SHEET, total_rows)
-                df.iloc[start:end].to_excel(
-                    writer,
-                    sheet_name=f"Sheet{i + 1}",
-                    index=False,
-                )
-                bar.update(1)                 # ← bump the sheet bar
-        self.logger.info(f"✅  Saved {filename} ({total_rows:,} rows, {sheet_count} sheet[s])")
-    except Exception as e:
-        self.logger.error(f"❌  Failed saving {filename}: {e}")
-        raise
-    finally:
-        bar.close()
+    # Handle ToString([col])
+    formula = re.sub(r'ToString\s*\(\s*[\[\(]?["\']?(\w+)["\']?[\]\)]?\s*\)', r'CAST(\1 AS STRING)', formula, flags=re.IGNORECASE)
 
-# ────────────────────────────────────────────────────────────────────────────────
-def save_all_excel_files(self, max_workers=4, show_progress=True):
-    """
-    Save every DataFrame → Excel file in parallel.
-    A global progress bar shows how many files are done.
-    """
-    dfs_to_save = {
-        "I958.xlsx": self.I958,
-        "I962.xlsx": self.I962,
-        "Y001.xlsx": self.Y001,
-        "I974.xlsx": self.I974,
-        "SubProduct.xlsx": self.SubProduct,
-        "ISM01.xlsx": self.ISM,
-        "Matisse.xlsx": self.Matisse,
-        "result1.xlsx": self.result1,
-        "result2.xlsx": self.result2,
-        "result3.xlsx": self.result3,
-        "result3A.xlsx": self.result3A,
-        "result3B.xlsx": self.result3B,
-        "TVA.xlsx": self.TVA,
+    # Handle ToDate('col')
+    formula = re.sub(r'ToDate\s*\(\s*["\']?(\w+)["\']?\s*\)', r'TO_DATE(\1)', formula, flags=re.IGNORECASE)
+
+    # Handle DateTimeFormat([col], "%d%m%Y")
+    formula = re.sub(r'DateTimeFormat\s*\(\s*\[?(\w+)\]?\s*,\s*["\'](.*?)["\']\s*\)',
+                     lambda m: f"DATE_FORMAT({m.group(1)}, '{convert_datetime_format(m.group(2))}')", 
+                     formula, flags=re.IGNORECASE)
+
+    # Replace IIF(condition, true_val, false_val)
+    formula = re.sub(r'IIF\s*\(([^,]+),\s*([^,]+),\s*([^)]+)\)', 
+                     r'CASE WHEN \1 THEN \2 ELSE \3 END', formula, flags=re.IGNORECASE)
+
+    # Convert IF...ELSEIF...ELSE...ENDIF to CASE WHEN
+    formula = convert_if_else_to_case(formula)
+
+    # Replace Contains([col], "text") with LIKE
+    formula = re.sub(r'Contains\s*\(\s*\[?(\w+)\]?\s*,\s*["\'](.*?)["\']\s*\)', 
+                     r"\1 LIKE '%\2%'", formula, flags=re.IGNORECASE)
+
+    # Replace IsNull([col])
+    formula = re.sub(r'IsNull\s*\(\s*\[?(\w+)\]?\s*\)', r'\1 IS NULL', formula, flags=re.IGNORECASE)
+
+    # Replace In([col], "a", "b") with IN ('a','b')
+    formula = re.sub(r'In\s*\(\s*\[?(\w+)\]?\s*,\s*([^\)]+)\)', 
+                     lambda m: f"{m.group(1)} IN ({', '.join(map(lambda x: x.strip().replace('\"', '\'').replace('[', '').replace(']', ''), m.group(2).split(',')))})",
+                     formula, flags=re.IGNORECASE)
+
+    # Replace brackets
+    formula = formula.replace('[', '').replace(']', '')
+    
+    return formula.strip()
+
+def convert_datetime_format(alteryx_fmt):
+    # Mapping Alteryx date tokens to Spark format
+    mappings = {
+        '%d': 'dd', '%m': 'MM', '%Y': 'uuuu', '%y': 'yy',
+        '%H': 'HH', '%I': 'hh', '%M': 'mm', '%S': 'ss',
+        '%p': 'a'
     }
+    for k, v in mappings.items():
+        alteryx_fmt = alteryx_fmt.replace(k, v)
+    return alteryx_fmt
 
-    file_bar = tqdm(
-        total=len(dfs_to_save),
-        desc="Overall progress",
-        unit="file",
-        disable=not show_progress,
-    )
+def convert_if_else_to_case(formula):
+    lines = formula.strip().split('\n')
+    case_lines = []
+    in_if_block = False
+    for line in lines:
+        line = line.strip()
+        if line.upper().startswith('IF '):
+            condition = line[3:].strip().rstrip('THEN').strip()
+            case_lines.append(f'CASE WHEN {condition} THEN')
+            in_if_block = True
+        elif line.upper().startswith('ELSEIF '):
+            condition = line[7:].strip().rstrip('THEN').strip()
+            case_lines.append(f'WHEN {condition} THEN')
+        elif line.upper().startswith('ELSE'):
+            case_lines.append('ELSE')
+        elif line.upper().startswith('ENDIF'):
+            case_lines.append('END')
+            in_if_block = False
+        else:
+            case_lines[-1] += f" '{line}'"
+    return '\n'.join(case_lines)
 
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        future_to_fname = {
-            pool.submit(self.save_df_to_excel_fast, df, fname, show_progress): fname
-            for fname, df in dfs_to_save.items()
-        }
-        for fut in as_completed(future_to_fname):
-            fut.result()      # re-raise errors if any
-            file_bar.update(1)
+@app.route('/', methods=['GET', 'POST'])
+def index():
+    spark_sql = ''
+    alteryx_formula = ''
+    if request.method == 'POST':
+        alteryx_formula = request.form['alteryx_formula']
+        spark_sql = convert_alteryx_to_sparksql(alteryx_formula)
+    return render_template_string(HTML, alteryx_formula=alteryx_formula, spark_sql=spark_sql)
 
-    file_bar.close()
-    self.logger.info("🏁  All Excel files saved successfully.")
+if __name__ == '__main__':
+    app.run(debug=True)
