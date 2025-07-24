@@ -1,197 +1,112 @@
-from flask import Flask, request, render_template_string, jsonify
+from flask import Flask, render_template_string, request
 import re
 
 app = Flask(__name__)
 
-# ---------------------------------
-# Alteryx to Spark SQL conversion
-# ---------------------------------
-
-FUNCTION_MAP = {
-    "ToNumber": lambda args: f"CAST({args[0]} AS DOUBLE)",
-    "ToString": lambda args: f"CAST({args[0]} AS STRING)",
-    "DateTimeFormat": lambda args: f"DATE_FORMAT({args[0]}, {args[1]})",
-    "IF": lambda args: f"(CASE WHEN {args[0]} THEN {args[1]} ELSE {args[2]} END)",
-    "IIF": lambda args: f"(CASE WHEN {args[0]} THEN {args[1]} ELSE {args[2]} END)",
-    "ISNULL": lambda args: f"ISNULL({args[0]})",
-    "NOT": lambda args: f"(NOT ({args[0]}))",
-    "IN": lambda args: f"({args[0]} IN ({', '.join(args[1:])}))",
-    "TRIM": lambda args: f"TRIM({args[0]})",
-    "LEFT": lambda args: f"LEFT({args[0]}, {args[1]})",
-    "RIGHT": lambda args: f"RIGHT({args[0]}, {args[1]})",
-    "UPPERCASE": lambda args: f"UPPER({args[0]})",
-    "LOWERCASE": lambda args: f"LOWER({args[0]})",
-    "FLOOR": lambda args: f"FLOOR({args[0]})",
-    "CEIL": lambda args: f"CEIL({args[0]})",
-    "ABS": lambda args: f"ABS({args[0]})",
-    "ROUND": lambda args: f"ROUND({args[0]}, {args[1]})",
-    "MOD": lambda args: f"MOD({args[0]}, {args[1]})",
-    "NOW": lambda args: "CURRENT_TIMESTAMP"
-}
-
-def parse_expression(expr):
-    expr = expr.strip()
-
-    for func in FUNCTION_MAP:
-        pattern = rf"{func}\((.*?)\)"
-        match = re.search(pattern, expr, re.IGNORECASE)
-
-        if match:
-            inner = match.group(1)
-            args = split_args(inner)
-            parsed_args = [parse_expression(arg.strip()) for arg in args]
-            sql_expr = FUNCTION_MAP[func](parsed_args)
-            expr = expr.replace(f"{func}({inner})", sql_expr)
-            return parse_expression(expr)
-
-    return expr
-
-def split_args(arg_string):
-    args = []
-    bracket = 0
-    current = ''
-    for char in arg_string:
-        if char == ',' and bracket == 0:
-            args.append(current.strip())
-            current = ''
-        else:
-            if char == '(':
-                bracket += 1
-            elif char == ')':
-                bracket -= 1
-            current += char
-    if current:
-        args.append(current.strip())
-    return args
-
-# ---------------------------------
-# UI Route
-# ---------------------------------
-
-@app.route('/', methods=['GET', 'POST'])
-def index():
-    output = ''
-    error = ''
-    if request.method == 'POST':
-        try:
-            input_formula = request.form['formula']
-            output = parse_expression(input_formula)
-        except Exception as e:
-            error = str(e)
-
-    return render_template_string('''
+HTML = '''
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Alteryx to SparkSQL Converter</title>
+    <meta charset="UTF-8">
+    <title>Ultimate Alteryx → SparkSQL Converter</title>
     <style>
-        body {
-            font-family: 'Segoe UI', sans-serif;
-            background: linear-gradient(to right, #0f2027, #203a43, #2c5364);
-            color: #fff;
-            padding: 40px;
-            text-align: center;
-        }
-        h1 {
-            font-size: 2em;
-            margin-bottom: 20px;
-            animation: fadeIn 1s ease-in-out;
-        }
-        form {
-            margin: auto;
-            width: 80%;
-            animation: slideIn 1s ease;
-        }
-        textarea {
-            width: 100%;
-            padding: 12px;
-            border-radius: 8px;
-            border: none;
-            font-size: 1em;
-            color: #333;
-        }
-        button {
-            margin-top: 15px;
-            background-color: #1abc9c;
-            border: none;
-            padding: 12px 24px;
-            color: white;
-            font-size: 1em;
-            border-radius: 6px;
-            cursor: pointer;
-            transition: 0.3s;
-        }
-        button:hover {
-            background-color: #16a085;
-        }
-        .result {
-            margin-top: 30px;
-            background-color: #ffffff11;
-            padding: 20px;
-            border-radius: 10px;
-            font-size: 1.1em;
-            position: relative;
-        }
-        .copy-btn {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: #555;
-            color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .error {
-            color: #ff6b6b;
-            margin-top: 15px;
-        }
-        @keyframes fadeIn {
-            from {opacity: 0;}
-            to {opacity: 1;}
-        }
-        @keyframes slideIn {
-            from {transform: translateY(-30px); opacity: 0;}
-            to {transform: translateY(0); opacity: 1;}
-        }
+        body { background-color: #121212; color: #eee; font-family: Consolas, monospace; padding: 20px; }
+        textarea, pre { width: 100%; background-color: #1f1f1f; color: #00ffcc; border: none; padding: 10px; font-size: 16px; }
+        button { background: #00ffcc; border: none; padding: 10px 20px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+        h1 { color: #ff4081; }
     </style>
 </head>
 <body>
-    <h1>🧠 Alteryx Formula → Spark SQL Converter</h1>
+    <h1>🧠 Ultimate Alteryx Formula → Spark SQL Converter</h1>
     <form method="POST">
-        <textarea name="formula" rows="4" placeholder="Enter Alteryx formula here..." required>{{ request.form.get('formula', '') }}</textarea>
-        <br>
-        <button type="submit">🔄 Convert</button>
+        <textarea name="input_formula" rows="10" placeholder="Paste your complex Alteryx formula here...">{{ input_formula or '' }}</textarea><br>
+        <button type="submit">🚀 Convert</button>
     </form>
-
-    {% if output %}
-    <div class="result">
-        <button class="copy-btn" onclick="copyToClipboard()">📋 Copy</button>
-        <code id="result">{{ output }}</code>
-    </div>
+    {% if output_sql %}
+    <h3>✨ Converted Spark SQL:</h3>
+    <pre>{{ output_sql }}</pre>
     {% endif %}
-    
-    {% if error %}
-    <div class="error">❌ Error: {{ error }}</div>
-    {% endif %}
-
-<script>
-function copyToClipboard() {
-    const text = document.getElementById("result").innerText;
-    navigator.clipboard.writeText(text).then(() => {
-        alert("Copied to clipboard!");
-    });
-}
-</script>
-
 </body>
 </html>
-''', output=output, error=error)
+'''
 
-# ---------------------------------
-# Run the App
-# ---------------------------------
+def convert_alteryx_to_spark_sql(formula):
+    formula = formula.replace("\r\n", "\n").replace("\r", "\n")
+    lines = formula.strip().split("\n")
+    output = []
+    stack = []
 
-if __name__ == '__main__':
+    def convert_function(line):
+        conversions = {
+            r"\bToNumber\(": "CAST(",
+            r"\bToString\(": "CAST(",
+            r"\bToDate\(": "CAST(",
+            r"\bToBoolean\(": "CAST(",
+            r"\bISNULL\(": "ISNULL(",
+            r"\bREGEX_Replace\(": "REGEXP_REPLACE(",
+            r"\bREGEX_Match\(": "REGEXP_LIKE(",
+            r"\bFINDSTRING\(": "INSTR(",
+            r"\bDateDiff\(": "DATEDIFF(",
+            r"\bDateTimeAdd\(": "DATE_ADD(",
+            r"\bDateTimeDiff\(": "DATEDIFF(",
+            r"\bNOW\(\)": "CURRENT_TIMESTAMP()",
+            r"\bDateTimeNow\(\)": "CURRENT_TIMESTAMP()",
+            r"\bLEFT\(": "SUBSTRING(",
+            r"\bRIGHT\(": "SUBSTRING(",
+        }
+
+        for pattern, replacement in conversions.items():
+            line = re.sub(pattern, replacement, line, flags=re.IGNORECASE)
+
+        # Adjust CASTs
+        line = re.sub(r"CAST\((.*?)\)", lambda m: _convert_cast(m.group(1)), line)
+
+        return line
+
+    def _convert_cast(inner):
+        if "ToString" in inner:
+            return f"CAST({inner.replace('ToString(', '').rstrip(')')} AS STRING)"
+        elif "ToNumber" in inner:
+            return f"CAST({inner.replace('ToNumber(', '').rstrip(')')} AS DOUBLE)"
+        elif "ToDate" in inner:
+            return f"CAST({inner.replace('ToDate(', '').rstrip(')')} AS DATE)"
+        elif "ToBoolean" in inner:
+            return f"CAST({inner.replace('ToBoolean(', '').rstrip(')')} AS BOOLEAN)"
+        return f"CAST({inner} AS STRING)"
+
+    for line in lines:
+        stripped = line.strip()
+
+        if stripped.upper().startswith("IF "):
+            condition = convert_function(stripped[3:].split(" THEN ")[0])
+            result = stripped.split(" THEN ")[1].strip('"')
+            output.append("CASE")
+            output.append(f"  WHEN {condition} THEN '{result}'")
+            stack.append("CASE")
+        elif stripped.upper().startswith("ELSEIF "):
+            condition = convert_function(stripped[7:].split(" THEN ")[0])
+            result = stripped.split(" THEN ")[1].strip('"')
+            output.append(f"  WHEN {condition} THEN '{result}'")
+        elif stripped.upper().startswith("ELSE"):
+            result = convert_function(stripped[5:].strip('"'))
+            output.append(f"  ELSE '{result}'")
+        elif stripped.upper() == "ENDIF":
+            if stack and stack[-1] == "CASE":
+                output.append("END")
+                stack.pop()
+        else:
+            output.append(convert_function(stripped))
+
+    return "\n".join(output)
+
+@app.route("/", methods=["GET", "POST"])
+def index():
+    input_formula = ""
+    output_sql = ""
+    if request.method == "POST":
+        input_formula = request.form["input_formula"]
+        output_sql = convert_alteryx_to_spark_sql(input_formula)
+    return render_template_string(HTML, input_formula=input_formula, output_sql=output_sql)
+
+if __name__ == "__main__":
     app.run(debug=True)
