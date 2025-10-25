@@ -1,8 +1,51 @@
-“I have the following Python code. It works partially but not perfectly — around 60–70% of the calculations and loop logic give correct results, but sometimes it fails. Please carefully analyze the entire code and then rewrite it in a clean, efficient, and fully working way.
+import pandas as pd
 
-Make sure to:
-	1.	Improve the loop structures and remove redundancy.
-	2.	Fix all calculation and comparison logic errors.
-	3.	Ensure it handles edge cases.
-	4.	Optimize for readability and performance.
-	5.	Provide the corrected full working code
+def rag_context_enricher(df):
+    """
+    RAG-like enrichment function:
+    - Groups data based on Radix thresholds.
+    - Calculates net sum for each group.
+    - Assigns multiplier at transaction level:
+        → If transaction amount >= 0 → 1
+        → If transaction amount < 0  → -1
+      But also references group-level net result to validate.
+    """
+
+    # Step 1: Conditional grouping logic based on Radix
+    first_radix = df['Radix'].iloc[0]
+    if first_radix > 80000:
+        group_cols = ['Radix', 'Ordinal', 'Account Type']
+    elif 60000 < first_radix <= 80000:
+        group_cols = ['Ordinal', 'Account Type', 'Sub Code']
+    elif 40000 < first_radix <= 60000:
+        group_cols = ['Account Type', 'Sub Code']
+    else:
+        group_cols = ['Radix', 'Sub Code']
+
+    # Step 2: Summarize amounts per group
+    group_sum = (
+        df.groupby(group_cols, as_index=False)['Amounts in INR']
+        .sum()
+        .rename(columns={'Amounts in INR': 'Group_Total'})
+    )
+
+    # Step 3: Merge group total back to original transactions
+    df = df.merge(group_sum, on=group_cols, how='left')
+
+    # Step 4: Assign multiplier based on individual transaction sign
+    # If group net is positive or zero:
+    #   → positive transaction → 1
+    #   → negative transaction → -1
+    # If group net is negative:
+    #   → positive transaction → -1
+    #   → negative transaction → 1
+    def assign_multiplier(row):
+        if row['Group_Total'] >= 0:
+            return 1 if row['Amounts in INR'] >= 0 else -1
+        else:
+            return -1 if row['Amounts in INR'] >= 0 else 1
+
+    df['multiplier'] = df.apply(assign_multiplier, axis=1)
+
+    # Step 5: Return detailed transaction-level data
+    return df
