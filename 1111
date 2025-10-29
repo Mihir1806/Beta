@@ -1,1 +1,38 @@
-We require a high-end laptop with GPU acceleration to efficiently process large datasets using Python libraries like Pandas, RAPIDS, and CuDF. Current workflows involve heavy data transformations, which are slow on CPU-only systems. GPU support drastically reduces execution time and improves overall productivity. This upgrade is critical for scaling data operations and meeting tight project deadlines.
+import pandas as pd
+
+# Step 1: Load both files
+bs = pd.read_excel("HK_BS_JUN2512356789.xlsx")      # Transaction (balance sheet)
+net = pd.read_excel("HONGKONG_A2709T.xlsx")         # Netting info (legs)
+
+# Step 2: Prepare HD and HE (two leg columns)
+net_hd = net[['A1010HD', 'A6000HD', '15772', '58762']].rename(
+    columns={'A1010HD': 'A1010', 'A6000HD': 'A6000'}
+)
+net_he = net[['A1010HE', 'A6000HE', '15772', '58762']].rename(
+    columns={'A1010HE': 'A1010', 'A6000HE': 'A6000'}
+)
+
+# Step 3: Combine HD and HE together
+net_combined = pd.concat([net_hd, net_he], ignore_index=True)
+
+# Step 4: Apply full leg logic
+def get_leg_type(row):
+    if row['15772'] == 1:
+        return "LEG"
+    elif row['15772'] == 2:
+        if row['58762'] == 3:
+            return "LEG 1"
+        elif row['58762'] == 5:
+            return "LEG 2"
+    return None
+
+net_combined['LEG_TYPE'] = net_combined.apply(get_leg_type, axis=1)
+
+# Step 5: Merge LEG_TYPE into the Balance Sheet without changing original data
+bs_with_leg = bs.merge(net_combined[['A1010', 'A6000', 'LEG_TYPE']],
+                       on=['A1010', 'A6000'], how='left')
+
+# Step 6: Save safely as a new file
+bs_with_leg.to_excel("HK_BS_JUN2512356789_with_legs.xlsx", index=False)
+
+print("✅ Done! Created file: HK_BS_JUN2512356789_with_legs.xlsx")
