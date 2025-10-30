@@ -1,245 +1,27 @@
-Build a fully Python-based 2D cooperative multiplayer puzzle platformer game inspired by It Takes Two, where two players — Vikalp and Bhavya — play together from different machines. The game includes:
-	•	25 levels with increasing complexity (each lasting 10–12 minutes)
-	•	Distinct cooperative puzzles (e.g., button/door, box-pushing, teleporting, platform jumping)
-	•	Unique abilities for each player (e.g., double-jump for Vikalp, teleportation for Bhavya)
-	•	Dynamic level transitions and themed environments
-	•	Save/load game support using local storage
-	•	Real-time multiplayer using Flask + Flask-SocketIO
-	•	Web interface with HTML fully embedded inside the Python script (no external files)
-	•	A Flask-based room system for up to 12 simultaneous 2-player game sessions, with name editing
-	•	Smooth movement, basic physics, and 60 FPS target
-	•	All frontend HTML and JavaScript rendered from within Python using render_template_string
+import pandas as pd
 
-The entire game — including graphics, multiplayer sync, game logic, puzzles, UI, and networking — should run from a single Python script, using only Python and web technologies embedded in it.
+# Step 1: Load Excel files
+df1 = pd.read_excel("JUN25.xlsx")   # Main table
+df2 = pd.read_excel("i984.xlsx")    # Amount / mapping table
 
+# Step 2: Group df2 to ensure one row per key
+# (Assume 'A' is the column to join on, and 'Amount' is your value)
+df2_grouped = df2.groupby('A', as_index=False)['Amount'].sum()
 
-import pygame
-import random
-import json
-import os
-import pickle
-from flask import Flask, render_template_string
-from flask_socketio import SocketIO, emit
-import threading
+# Step 3: Merge without increasing row count
+df_merged = df1.merge(df2_grouped, on='A', how='left')  # 'A' is unique in df1
 
-# Initialize Pygame and Flask
-pygame.init()
+# Step 4: Apply grouping logic if criterion = 'i984_2'
+if 'criterion' in df1.columns:
+    for criterion in df1['criterion'].unique():
+        if criterion == 'i984_2':
+            # Example: group by multiple columns (SAGA, etc.)
+            grouped_result = (
+                df_merged
+                .groupby(['SAGA-B35M', '7390P', '98763'], dropna=False)
+                ['Amount']
+                .sum()
+                .reset_index()
+            )
 
-# Game Constants
-WIDTH, HEIGHT = 800, 600
-FPS = 60
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
-clock = pygame.time.Clock()
-
-# Flask Setup for Multiplayer
-app = Flask(__name__)
-socketio = SocketIO(app)
-
-# Game Data (For Save/Load Feature)
-game_data_file = 'game_save.pickle'
-
-# Player Class with Abilities
-class Player:
-    def __init__(self, name, skin_color, abilities):
-        self.name = name
-        self.skin_color = skin_color
-        self.rect = pygame.Rect(100, 100, 40, 40)
-        self.velocity = 0
-        self.speed = 5
-        self.abilities = abilities
-        self.double_jump_available = True
-        self.is_teleporting = False
-        self.level = 1  # Track which level the player is on
-        self.is_pushing = False
-
-    def move(self, keys):
-        if keys[pygame.K_LEFT]:
-            self.rect.x -= self.speed
-        if keys[pygame.K_RIGHT]:
-            self.rect.x += self.speed
-        if keys[pygame.K_DOWN]:
-            self.rect.y += self.speed
-        if keys[pygame.K_UP]:
-            self.rect.y -= self.speed
-
-    def jump(self):
-        if self.double_jump_available:
-            self.velocity = -10
-            self.double_jump_available = False
-
-    def teleport(self, target_pos):
-        if self.is_teleporting:
-            self.rect.x, self.rect.y = target_pos
-
-    def push_object(self, obj):
-        if self.rect.colliderect(obj.rect):
-            obj.rect.x += self.speed
-
-# Level Data and Puzzle Logic (Multiple Steps)
-levels = [
-    {"name": "Forest", "puzzle": "Press the button to open the door.", "theme": "green", "objective": "Help Bhavya teleport through the gate.", "interactive_objects": []},
-    {"name": "Desert", "puzzle": "Push the box to open the passage.", "theme": "yellow", "objective": "Vikalp has to jump on platforms while Bhavya controls the lever.", "interactive_objects": []}
-]
-
-# Game Objects (Interactive Items)
-class GameObject:
-    def __init__(self, x, y, width, height, color, obj_type):
-        self.rect = pygame.Rect(x, y, width, height)
-        self.color = color
-        self.type = obj_type  # Type of object (e.g., button, box, etc.)
-
-# Create Players
-vikalp = Player("Vikalp", (0, 255, 0), abilities={"double_jump": True})
-bhavya = Player("Bhavya", (255, 0, 0), abilities={"teleport": True})
-
-# Level Objects (Interactive Items)
-box = GameObject(300, 350, 50, 50, (255, 165, 0), 'box')
-button = GameObject(500, 400, 100, 50, (0, 255, 255), 'button')
-
-levels[0]["interactive_objects"].extend([box, button])
-
-# Save and Load Game
-def save_game():
-    data = {
-        "vikalp": {"x": vikalp.rect.x, "y": vikalp.rect.y, "level": vikalp.level},
-        "bhavya": {"x": bhavya.rect.x, "y": bhavya.rect.y, "level": bhavya.level},
-        "level": vikalp.level
-    }
-    with open(game_data_file, 'wb') as f:
-        pickle.dump(data, f)
-
-def load_game():
-    if os.path.exists(game_data_file):
-        with open(game_data_file, 'rb') as f:
-            data = pickle.load(f)
-            vikalp.rect.x, vikalp.rect.y = data["vikalp"]["x"], data["vikalp"]["y"]
-            bhavya.rect.x, bhavya.rect.y = data["bhavya"]["x"], data["bhavya"]["y"]
-            vikalp.level = data["level"]
-            bhavya.level = data["level"]
-
-# Puzzle and Objective Interaction
-def interact_with_puzzle(level):
-    # Forest Puzzle: Button press (simulation)
-    for obj in level["interactive_objects"]:
-        if obj.type == 'button' and vikalp.rect.colliderect(obj.rect):
-            return True
-        if obj.type == 'box' and bhavya.rect.colliderect(obj.rect):
-            return True
-    return False
-
-# Main Game Loop
-def game_loop():
-    running = True
-    level_index = 0
-    while running:
-        screen.fill((0, 0, 0))  # Clear Screen
-        keys = pygame.key.get_pressed()
-        
-        # Player Movement
-        vikalp.move(keys)
-        bhavya.move(keys)
-        
-        # Display Players
-        pygame.draw.rect(screen, vikalp.skin_color, vikalp.rect)
-        pygame.draw.rect(screen, bhavya.skin_color, bhavya.rect)
-
-        # Handle Ability (Jump for Vikalp)
-        if keys[pygame.K_SPACE] and vikalp.double_jump_available:
-            vikalp.jump()
-
-        # Level Objective & Puzzle Interactions
-        current_level = levels[vikalp.level - 1]
-        for obj in current_level["interactive_objects"]:
-            pygame.draw.rect(screen, obj.color, obj.rect)
-        
-        if interact_with_puzzle(current_level):
-            print("Puzzle Completed!")
-            vikalp.level += 1  # Move to the next level
-
-        # Level Transition Logic
-        if vikalp.level > len(levels):
-            print("Game Completed!")
-            running = False
-        
-        pygame.display.update()
-        clock.tick(FPS)
-
-    pygame.quit()
-
-# Flask UI for Multiplayer and Save/Load
-@app.route('/')
-def index():
-    return render_template_string("""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Multiplayer Maze Game</title>
-        <style>
-            body { font-family: Arial, sans-serif; }
-            #rooms { margin: 20px; }
-            button { margin: 10px; }
-            #status { margin-top: 20px; font-weight: bold; }
-        </style>
-    </head>
-    <body>
-        <h1>Multiplayer Maze Game</h1>
-        <div id="rooms">
-            <button onclick="createRoom()">Create Room</button>
-            <button onclick="joinRoom()">Join Room</button>
-            <button onclick="saveGame()">Save Game</button>
-            <button onclick="loadGame()">Load Game</button>
-        </div>
-        <div id="status"></div>
-
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
-        <script>
-            const socket = io.connect('http://localhost:5000');
-            
-            function createRoom() {
-                const roomName = prompt("Enter Room Name:");
-                socket.emit('join_room', { room: roomName });
-                document.getElementById('status').innerText = `Created and joined room: ${roomName}`;
-            }
-
-            function joinRoom() {
-                const roomName = prompt("Enter Room Name to Join:");
-                socket.emit('join_room', { room: roomName });
-                document.getElementById('status').innerText = `Joined room: ${roomName}`;
-            }
-
-            function saveGame() {
-                fetch('/save')
-                    .then(response => response.text())
-                    .then(data => alert(data));
-            }
-
-            function loadGame() {
-                fetch('/load')
-                    .then(response => response.text())
-                    .then(data => alert(data));
-            }
-        </script>
-    </body>
-    </html>
-    """)
-
-# WebSocket Setup for Multiplayer
-@socketio.on('connect')
-def on_connect():
-    print('Player connected')
-
-@socketio.on('disconnect')
-def on_disconnect():
-    print('Player disconnected')
-
-@socketio.on('join_room')
-def on_join(data):
-    room = data['room']
-    emit('room_joined', {'message': f'Joined room {room}'}, room=room)
-
-# Running Flask App with WebSocket
-if __name__ == "__main__":
-    threading.Thread(target=game_loop).start()  # Start game in a separate thread
-    socketio.run(app, debug=True)
+print("✅ Merge done without increasing count.")
