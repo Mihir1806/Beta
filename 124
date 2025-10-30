@@ -1,151 +1,115 @@
-from flask import Flask, request, render_template_string, send_file
-import pandas as pd, numpy as np
-import json
+import pandas as pd
 
-app = Flask(__name__)
-OUTPUT = "enhanced_output.xlsx"
+# Step 1. Load all three files
+bs = pd.read_excel("HK_BS_JUN2512356789.xlsx")       # Balance Sheet
+net = pd.read_excel("HONGKONG_A2709T.xlsx")          # Netting HD/HE
+saga = pd.read_excel("SAGA_MAPPING.xlsx")            # New SAGA mapping file
 
-HTML = """<!doctype html>
-<html>
-<head>
-  <title>BayesMatch</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    body { background: #121212; color: #eee; }
-    .table td, .table th { color: #ccc; }
-    .score-cell { text-align:center; font-weight:bold; }
-    .score-heat { background-color: rgba(0, 255, 0, VAR); }
-    .score-low  { background-color: rgba(255, 0, 0, VAR); }
-  </style>
-</head>
-<body>
-<div class="container py-4">
-  <h1 class="mb-4">BayesMatch</h1>
-  <ul class="nav nav-tabs mb-4" id="tabs">
-    <li class="nav-item"><a class="nav-link active" data-bs-toggle="tab" href="#tab-upload">Upload</a></li>
-    {% if result is defined %}
-      <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-results">Results</a></li>
-      <li class="nav-item"><a class="nav-link" data-bs-toggle="tab" href="#tab-heatmap">Heatmap</a></li>
-    {% endif %}
-  </ul>
+# --------------------------
+# Step 2. Handle first (HD/HE) netting logic
+# --------------------------
+net_single = net[net['15772'] == 1].copy()
+net_single_he = net_single[['A1010HE', 'A6000HE', '15772']].rename(
+    columns={'A1010HE': 'A1010', 'A6000HE': 'A6000'}
+)
+net_single_hd = net_single[['A1010HD', 'A6000HD', '15772']].rename(
+    columns={'A1010HD': 'A1010', 'A6000HD': 'A6000'}
+)
+net_single_combined = pd.concat([net_single_he, net_single_hd], ignore_index=True)
+net_single_combined['LEG_TYPE'] = 'LEG'
 
-  <div class="tab-content">
-    <div class="tab-pane fade show active" id="tab-upload">
-      <form method="POST" action="/predict" enctype="multipart/form-data">
-        <div class="mb-3"><label>Master File:</label><input type="file" name="master" required></div>
-        <div class="mb-3"><label>Transaction File:</label><input type="file" name="transaction" required></div>
-        <div class="mb-3"><label>Optional Config File (JSON/Excel):</label><input type="file" name="config"></div>
-        <button class="btn btn-success">Run Prediction</button>
-      </form>
-    </div>
+net_double = net[net['15772'] == 2].copy()
+leg1 = net_double[['A1010HE', 'A6000HE', '15772']].rename(
+    columns={'A1010HE': 'A1010', 'A6000HE': 'A6000'}
+)
+leg1['LEG_TYPE'] = 'LEG 1'
 
-    {% if result is defined %}
-    <div class="tab-pane fade" id="tab-results">
-      <a href="/download" class="btn btn-primary mb-3">📥 Download Output</a>
-      <div class="table-responsive">
-        {{ result.to_html(classes="table table-striped table-dark", index=False) | safe }}
-      </div>
-    </div>
+leg2 = net_double[['A1010HD', 'A6000HD', '15772']].rename(
+    columns={'A1010HD': 'A1010', 'A6000HD': 'A6000'}
+)
+leg2['LEG_TYPE'] = 'LEG 2'
 
-    <div class="tab-pane fade" id="tab-heatmap">
-      <h4>Matching Score Heatmap (Top 3)</h4>
-      <div class="table-responsive">
-        <table class="table table-bordered table-dark">
-          <thead><tr><th>Transaction #</th>{% for m in masters %}<th>{{ m }}</th>{% endfor %}</tr></thead>
-          <tbody>
-            {% for row in heatmap %}
-              <tr><td>Txn {{ loop.index }}</td>
-              {% for score in row %}
-                {% set var = "%.2f" | format(score/3) %}
-                <td class="score-cell score-heat" style="background-color: rgba(0, 255, 0, {{ var }});">{{ score }}</td>
-              {% endfor %}
-              </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
-    {% endif %}
-  </div>
-</div>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>"""
+net_final = pd.concat([net_single_combined, leg1, leg2], ignore_index=True)
 
-def read_data(f):
-    ext = f.filename.split('.')[-1].lower()
-    if ext in ('xls', 'xlsx'):
-        return pd.read_excel(f)
-    elif ext == 'csv':
-        return pd.read_csv(f)
-    elif ext == 'json':
-        return json.load(f)
-    return None
+# --------------------------
+# Step 3. Handle second (SAGA) mapping logic
+# --------------------------
+def saga_leg(row):
+    if row['98762'] == 2:
+        if pd.notna(row['98763']):
+            return 'LEG 1'
+        elif pd.notna(row['07390P']):
+            return 'LEG 2'
+    return 'LEG'
 
-def compute_scores(master, row, attrs, range_cols):
-    scores = []
-    for _, m in master.iterrows():
-        score = 0
-        for attr in attrs:
-            if attr in row and pd.notna(row[attr]) and pd.notna(m[attr]):
-                if str(row[attr]).strip().lower() == str(m[attr]).strip().lower():
-                    score += 1
-        for r in range_cols:
-            minv = m[r + '_Min']
-            maxv = m[r + '_Max']
-            val = row.get(r)
-            if pd.notna(val) and pd.notna(minv) and pd.notna(maxv):
-                if float(minv) <= float(val) <= float(maxv):
-                    score += 1
-        scores.append(score)
-    return scores
+# Flatten SAGA table for merging
+saga_leg1 = saga[['98763', '98762']].rename(columns={'98763': 'SAGA-B35M'})
+saga_leg1['LEG_TYPE'] = 'LEG 1'
 
-@app.route("/", methods=["GET"])
-def index():
-    return render_template_string(HTML)
+saga_leg2 = saga[['07390P', '98762']].rename(columns={'07390P': 'SAGA-B35M'})
+saga_leg2['LEG_TYPE'] = 'LEG 2'
 
-@app.route("/predict", methods=["POST"])
-def predict():
-    master = read_data(request.files['master'])
-    trans = read_data(request.files['transaction'])
-    cfg = None
-    cfg_file = request.files.get("config")
-    if cfg_file:
-        cfg = read_data(cfg_file)
+saga_leg_combined = pd.concat([saga_leg1, saga_leg2], ignore_index=True)
+saga_leg_combined.loc[saga_leg_combined['98762'] != 2, 'LEG_TYPE'] = 'LEG'
 
-    end_col = "EndKey"
-    attr_cols = [c for c in master.columns if c != end_col and not c.endswith(('_Min', '_Max'))]
-    range_cols = [c[:-4] for c in master.columns if c.endswith('_Min') and c[:-4] + '_Max' in master.columns]
+# --------------------------
+# Step 4. Merge everything to Balance Sheet
+# --------------------------
+bs_merge1 = bs.merge(net_final[['A1010', 'A6000', 'LEG_TYPE']],
+                     on=['A1010', 'A6000'], how='left')
 
-    if cfg:
-        if isinstance(cfg, dict):
-            end_col = cfg.get("EndKey", end_col)
-            attr_cols = cfg.get("Attributes", attr_cols)
-        else:
-            row = cfg.iloc[0]
-            end_col = row.EndKey
-            attr_cols = [a.strip() for a in row.Attributes.split(',')]
+bs_final = bs_merge1.merge(saga_leg_combined[['SAGA-B35M', 'LEG_TYPE']],
+                           on='SAGA-B35M', how='left', suffixes=('', '_SAGA'))
 
-    preds, heatmap = [], []
-    for _, t in trans.iterrows():
-        scores = compute_scores(master, t, attr_cols, range_cols)
-        top3_idx = np.argsort(scores)[::-1][:3]
-        top3 = [(master.iloc[i][end_col], scores[i]) for i in top3_idx]
-        preds.append({
-            end_col: top3[0][0],
-            "Top3": ', '.join(f"{k}:{v}" for k, v in top3)
-        })
-        heatmap.append([s for _, s in top3])
+# --------------------------
+# Step 5. Consolidate final LEG_TYPE column
+# --------------------------
+bs_final['LEG_TYPE_FINAL'] = bs_final['LEG_TYPE'].combine_first(bs_final['LEG_TYPE_SAGA'])
 
-    result = pd.concat([trans.reset_index(drop=True), pd.DataFrame(preds)], axis=1)
-    result.to_excel(OUTPUT, index=False)
+# --------------------------
+# Step 6. Add I984 logic (Grouping)
+# --------------------------
+i984_df = bs_final[bs_final['Table Name'] == 'I984DT'].copy()
 
-    return render_template_string(HTML, result=result, heatmap=heatmap,
-                                  masters=[f"Match {i+1}" for i in range(3)])
+if not i984_df.empty:
+    # Remove unwanted columns
+    i984_df = i984_df.drop(columns=['A1010', 'A6000'], errors='ignore')
 
-@app.route("/download")
-def download():
-    return send_file(OUTPUT, as_attachment=True)
+    # Filter only rows having relevant saga columns
+    i984_df = i984_df[i984_df[['07390P', '98763', '98762']].notna().any(axis=1)]
 
-if __name__ == "__main__":
-    app.run(debug=True)
+    # Case 1: 98762 == 1 → group by 07390P
+    mask_single = i984_df['98762'] == 1
+    if mask_single.any():
+        i984_df.loc[mask_single, 'I984_Group'] = (
+            i984_df.loc[mask_single]
+            .groupby('07390P')['IAS REPORTING AMOUNT/REP_CURR']
+            .transform('sum')
+        )
+
+    # Case 2: 98762 == 2 → row-by-row if both match
+    mask_double = i984_df['98762'] == 2
+    if mask_double.any():
+        i984_df.loc[mask_double, 'PAIR_KEY'] = (
+            i984_df.loc[mask_double, ['07390P', '98763']]
+            .astype(str)
+            .agg('|'.join, axis=1)
+        )
+        i984_df.loc[mask_double, 'I984_Group'] = (
+            i984_df.loc[mask_double]
+            .groupby('PAIR_KEY')['IAS REPORTING AMOUNT/REP_CURR']
+            .transform('sum')
+        )
+
+    # Merge back into main
+    bs_final = bs_final.merge(
+        i984_df[['NoTab', 'I984_Group']],
+        on='NoTab', how='left'
+    )
+
+# --------------------------
+# Step 7. Save final result
+# --------------------------
+bs_final.to_excel("HK_BS_JUN2512356789_with_all_legs_i984.xlsx", index=False)
+
+print("✅ Done! File created: HK_BS_JUN2512356789_with_all_legs_i984.xlsx")
