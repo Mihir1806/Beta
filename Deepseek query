@@ -23,3 +23,13 @@ final = pd.concat([df1.rename(columns={'col2':'group_key'}),
                   ignore_index=True)
 
 print(final)
+
+
+
+elif criterion == 'I984_1':
+    # Group by Asset leg when criterion = I984_1
+    group_cols = ['7390P']   # asset leg account number
+
+elif criterion == 'I984_2':
+    # Group by SAGA where SAGA matches asset or liability leg
+    group_cols = mask[(mask['SAGA'] == mask['7390P']) | (mask['SAGA'] == mask['98763'])]
