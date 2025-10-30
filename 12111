@@ -1,100 +1,101 @@
-from flask import Flask, request, render_template_string
-import re
+import pandas as pd
 
-app = Flask(__name__)
+# Step 1. Load all three files
+bs = pd.read_excel("HK_BS_JUN2512356789.xlsx")       # Balance Sheet
+net = pd.read_excel("HONGKONG_A2709T.xlsx")          # Netting HD/HE
+saga = pd.read_excel("SAGA_MAPPING.xlsx")            # New SAGA mapping file
 
-# ───────────────────────── helpers ───────────────────────── #
-def spark_fmt(fmt: str) -> str:
-    for k, v in {"%Y":"yyyy","%y":"yy","%m":"MM","%d":"dd",
-                 "%H":"HH","%M":"mm","%S":"ss"}.items():
-        fmt = fmt.replace(k, v)
-    return fmt
+# --------------------------
+# Step 2. Handle first (HD/HE) netting logic
+# --------------------------
+net_single = net[net['15772'] == 1].copy()
+net_single_he = net_single[['A1010HE', 'A6000HE', '15772']].rename(
+    columns={'A1010HE': 'A1010', 'A6000HE': 'A6000'}
+)
+net_single_hd = net_single[['A1010HD', 'A6000HD', '15772']].rename(
+    columns={'A1010HD': 'A1010', 'A6000HD': 'A6000'}
+)
+net_single_combined = pd.concat([net_single_he, net_single_hd], ignore_index=True)
+net_single_combined['LEG_TYPE'] = 'LEG'
 
-def dt_add(expr: str, n: int, unit: str) -> str:
-    unit = unit.lower()
-    if unit.startswith('day'):
-        return f"date_add({expr}, {n})" if n >= 0 else f"date_sub({expr}, {-n})"
-    if unit.startswith('month'):
-        return f"add_months({expr}, {n})"
-    if unit.startswith('year'):
-        return f"add_months({expr}, {n*12})"
-    return expr
+net_double = net[net['15772'] == 2].copy()
+leg1 = net_double[['A1010HE', 'A6000HE', '15772']].rename(
+    columns={'A1010HE': 'A1010', 'A6000HE': 'A6000'}
+)
+leg1['LEG_TYPE'] = 'LEG 1'
 
-def dt_diff(a: str, b: str, unit: str) -> str:
-    unit = unit.lower()
-    if unit.startswith('day'):
-        return f"DATEDIFF({a}, {b})"
-    if unit.startswith('month'):
-        return f"MONTHS_BETWEEN({a}, {b})"
-    if unit.startswith('year'):
-        return f"(MONTHS_BETWEEN({a}, {b})/12)"
-    return f"DATEDIFF({a},{b})"
+leg2 = net_double[['A1010HD', 'A6000HD', '15772']].rename(
+    columns={'A1010HD': 'A1010', 'A6000HD': 'A6000'}
+)
+leg2['LEG_TYPE'] = 'LEG 2'
 
-ARG = r'(?:[^,(]|\([^)]*\))+?'  # balanced-like first-arg matcher
+net_final = pd.concat([net_single_combined, leg1, leg2], ignore_index=True)
 
-add_rx  = re.compile(rf'DateTimeAdd\(\s*({ARG})\s*,\s*(-?\d+)\s*,\s*[\'"](days|months|years)[\'"]\s*\)', re.I)
-diff_rx = re.compile(rf'DateTimeDiff\(\s*({ARG})\s*,\s*({ARG})\s*,\s*[\'"](days|months|years)[\'"]\s*\)', re.I)
+# --------------------------
+# Step 3. Handle second (SAGA) mapping logic
+# --------------------------
+def saga_leg(row):
+    if row['98762'] == 2:
+        if pd.notna(row['98763']):
+            return 'LEG 1'
+        elif pd.notna(row['07390P']):
+            return 'LEG 2'
+    return 'LEG'
 
-# ──────────────────────── converter ──────────────────────── #
-def convert(f: str) -> str:
-    f = f.strip()
-    while True:
-        old = f
-        f = re.sub(r'DateTimeNow\(\)',  "current_timestamp()",                      f, flags=re.I)
-        f = re.sub(r'DateTimeToday\(\)',"current_date()",                           f, flags=re.I)
-        f = re.sub(r'DateTimeFirstOfMonth\(\)', "date_trunc(\'month\', current_date())", f, flags=re.I)
-        f = re.sub(r'DateTimeFirstOfMonth\(\s*([^)]+?)\s*\)', r"date_trunc('month', \1)", f, flags=re.I)
-        f = re.sub(
-            r'DateTimeFormat\(\s*([^\s,]+?)\s*,\s*"([^"]+)"\s*\)',
-            lambda m: f"date_format({m.group(1)}, '{spark_fmt(m.group(2))}')", f, flags=re.I)
+# Flatten SAGA table for merging
+saga_leg1 = saga[['98763', '98762']].rename(columns={'98763': 'SAGA-B35M'})
+saga_leg1['LEG_TYPE'] = 'LEG 1'
 
-        f = add_rx.sub(lambda m: dt_add(m.group(1), int(m.group(2)), m.group(3)), f)
-        f = diff_rx.sub(lambda m: dt_diff(m.group(1), m.group(2), m.group(3)), f)
+saga_leg2 = saga[['07390P', '98762']].rename(columns={'07390P': 'SAGA-B35M'})
+saga_leg2['LEG_TYPE'] = 'LEG 2'
 
-        f = re.sub(r'I{1,2}F{1,2}\(\s*([^,]+?)\s*,\s*([^,]+?)\s*,\s*([^)]+?)\)',
-                   r'CASE WHEN \1 THEN \2 ELSE \3 END', f, flags=re.I)
-        f = re.sub(r'\bIf\s+(.+?)\s+Then\s+(.+?)\s+Else\s+(.+?)\s+EndIf\b',
-                   r'CASE WHEN \1 THEN \2 ELSE \3 END', f, flags=re.I|re.S)
+saga_leg_combined = pd.concat([saga_leg1, saga_leg2], ignore_index=True)
+saga_leg_combined.loc[saga_leg_combined['98762'] != 2, 'LEG_TYPE'] = 'LEG'
 
-        f = re.sub(r'Trim\(\s*([^)]+?)\)',  r'TRIM(\1)', f, flags=re.I)
-        f = re.sub(r'Len\(\s*([^)]+?)\)',   r'LENGTH(\1)', f, flags=re.I)
-        f = re.sub(r'Left\(\s*([^,]+?)\s*,\s*([^)]+?)\)',  r'SUBSTRING(\1,1,\2)', f, flags=re.I)
-        f = re.sub(r'Right\(\s*([^,]+?)\s*,\s*([^)]+?)\)', r'SUBSTRING(\1,LENGTH(\1)-\2+1,\2)', f, flags=re.I)
-        f = re.sub(r'Contains\(\s*([^,]+?)\s*,\s*([^)]+?)\)', r'INSTR(\1,\2) > 0', f, flags=re.I)
+# --------------------------
+# Step 4. Merge everything to Balance Sheet
+# --------------------------
+bs_merge1 = bs.merge(net_final[['A1010', 'A6000', 'LEG_TYPE']],
+                     on=['A1010', 'A6000'], how='left')
 
-        if f == old:
-            break
-    return f
+bs_final = bs_merge1.merge(saga_leg_combined[['SAGA-B35M', 'LEG_TYPE']],
+                           on='SAGA-B35M', how='left', suffixes=('', '_SAGA'))
 
-# ────────────────────────── ui ───────────────────────────── #
-HTML = '''
-<!doctype html><html><head><title>Alteryx⇄Spark</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.css">
-<style>body{background:#1e1e2f;color:#eee;font-family:Arial;padding:40px}
-.wrap{max-width:900px;margin:auto}h1{text-align:center;color:#00f0ff}
-textarea,pre{width:100%;background:#2d2d3a;color:#fff;border:1px solid #444;
-padding:10px;font-size:16px;border-radius:6px}button{padding:10px 20px;
-font-size:16px;background:#00cec9;border:none;margin-top:10px;cursor:pointer}</style>
-</head><body><div class="wrap">
-<h1>🧠 Alteryx ⇄ Spark SQL Converter</h1>
-<form method="POST"><textarea id="txt" name="formula" rows="4">{{ form|e }}</textarea>
-<button type="submit">Convert</button></form>{% if res %}<h3>Converted:</h3>
-<pre>{{ res|e }}</pre>{% endif %}</div>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/codemirror.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.5/mode/sql/sql.min.js"></script>
-<script>const ed=CodeMirror.fromTextArea(document.getElementById('txt'),
-{lineNumbers:true,mode:'sql',theme:'default'});
-document.querySelector('form').addEventListener('submit',()=>{document.getElementById('txt').value=ed.getValue();});
-</script></body></html>
-'''
+# --------------------------
+# Step 5. Consolidate final LEG_TYPE column
+# --------------------------
+bs_final['LEG_TYPE_FINAL'] = bs_final['LEG_TYPE'].combine_first(bs_final['LEG_TYPE_SAGA'])
 
-@app.route("/", methods=["GET","POST"])
-def main():
-    inp=out=""
-    if request.method=="POST":
-        inp=request.form.get("formula","")
-        out=convert(inp)
-    return render_template_string(HTML, form=inp, res=out)
+# --------------------------
+# ✅ Step 6. Add 1984DT (i987) Group-By Logic
+# --------------------------
+# Explanation:
+#   If 98762 == 1 → group by 07390P only
+#   If 98762 == 2 → group by both 07390P and 98763 of the same row
 
-if __name__ == "__main__":
-    app.run(debug=True)
+# make safe string types
+bs_final[['07390P', '98763', '98762']] = bs_final[['07390P', '98763', '98762']].fillna('').astype(str)
+
+def make_group_key(row):
+    if row['98762'] == '1':
+        return tuple([row['07390P']])
+    elif row['98762'] == '2':
+        return tuple([row['07390P'], row['98763']])
+    else:
+        return tuple([row['07390P']])
+
+bs_final['GROUP_KEY'] = bs_final.apply(make_group_key, axis=1)
+
+# Perform the groupby sum by CONTRACT REFERENCE + GROUP_KEY
+if 'CONTRACT REFERENCE' in bs_final.columns and 'IAS REPORTING AMOUNT/REP_CURR' in bs_final.columns:
+    bs_final['GROUP_TOTAL_I987'] = (
+        bs_final.groupby(['CONTRACT REFERENCE', 'GROUP_KEY'])['IAS REPORTING AMOUNT/REP_CURR']
+        .transform('sum')
+    )
+
+# --------------------------
+# Step 7. Save safely
+# --------------------------
+bs_final.to_excel("HK_BS_JUN2512356789_with_all_legs_i987.xlsx", index=False)
+
+print("✅ Done! File created: HK_BS_JUN2512356789_with_all_legs_i987.xlsx")
