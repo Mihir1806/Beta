@@ -1,107 +1,25 @@
-from flask import Flask, render_template_string, request
-import re
+import pandas as pd
 
-app = Flask(__name__)
+# Example DataFrame
+df = pd.DataFrame({
+    'col1': [1001, 2001, 3001, 4001],
+    'col2': [1001, 2001, 3001, 4001],
+    'col3': [2001, 3001, 4001, 1001],
+    'col4': [1, 2, 2, 1],
+    'value': [10, 20, 30, 40]
+})
 
-# Basic Alteryx to Spark SQL conversion logic
-def convert_to_sql(alteryx_expr):
-    expr = alteryx_expr.strip()
+# --- For flag = 1 → group by asset leg (col2)
+df1 = df[df['col4'] == 1].groupby('col2', as_index=False)['value'].sum()
 
-    # Handle IF-ELSE logic
-    if expr.upper().startswith("IF "):
-        return convert_if_else(expr)
+# --- For flag = 2 → group by col1, but only if col1 appears in col2 or col3 of same row
+df2 = df[df['col4'] == 2].copy()
+df2 = df2[(df2['col1'] == df2['col2']) | (df2['col1'] == df2['col3'])]
+df2 = df2.groupby('col1', as_index=False)['value'].sum()
 
-    # Direct function conversion
-    expr = expr.replace("ToNumber(", "CAST(")
-    expr = expr.replace("ToDate(", "TO_DATE(")
-    expr = expr.replace("DateTimeDiff(", "DATEDIFF(")
-    expr = expr.replace("DateTimeAdd(", "DATE_ADD(")
-    expr = expr.replace("DateTimeFormat(", "DATE_FORMAT(")
-    expr = expr.replace("DateTimeNow()", "CURRENT_TIMESTAMP")
-    expr = expr.replace("NOW()", "CURRENT_TIMESTAMP")
-    expr = expr.replace("DateTimeToday()", "CURRENT_DATE")
-    expr = expr.replace("DateTimeYear(", "YEAR(")
-    expr = expr.replace("DateTimeMonth(", "MONTH(")
-    expr = expr.replace("DateTimeDay(", "DAY(")
-    expr = expr.replace("DateTimeHour(", "HOUR(")
-    expr = expr.replace("DateTimeMinute(", "MINUTE(")
+# Combine results
+final = pd.concat([df1.rename(columns={'col2':'group_key'}),
+                   df2.rename(columns={'col1':'group_key'})],
+                  ignore_index=True)
 
-    return expr
-
-# IF-ELSEIF-ELSE conversion
-def convert_if_else(expr):
-    expr = expr.strip().rstrip("ENDIF").strip()
-    lines = re.split(r'\bELSEIF\b|\bIF\b|\bELSE\b', expr, flags=re.IGNORECASE)
-    parts = re.findall(r'\bIF\b|\bELSEIF\b|\bELSE\b', expr, flags=re.IGNORECASE)
-
-    conditions = []
-    for i, token in enumerate(parts):
-        token = token.upper()
-        line = lines[i + 1].strip()
-        if token in ['IF', 'ELSEIF']:
-            cond, result = parse_condition_then(line)
-            conditions.append(f"WHEN {cond} THEN {result}")
-        elif token == 'ELSE':
-            conditions.append(f"ELSE {line}")
-
-    return "CASE\n    " + "\n    ".join(conditions) + "\nEND"
-
-# Parse condition THEN part
-def parse_condition_then(line):
-    if 'THEN' not in line.upper():
-        return "TRUE", line  # fallback
-    split = re.split(r'\bTHEN\b', line, flags=re.IGNORECASE)
-    condition = split[0].strip()
-    result = split[1].strip()
-    return condition, result
-
-# ---------------- HTML Frontend --------------------
-html_template = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Alteryx to Spark SQL Converter</title>
-    <style>
-        body { font-family: 'Segoe UI', sans-serif; background: #1e1e1e; color: white; padding: 30px; }
-        h2 { color: #00d9ff; }
-        textarea, input[type=submit] {
-            width: 100%; padding: 12px; margin-top: 10px; font-size: 16px;
-            background-color: #2b2b2b; color: white; border: 1px solid #555;
-        }
-        textarea { height: 150px; }
-        .output { margin-top: 20px; padding: 15px; background-color: #2e2e2e; border: 1px solid #444; }
-    </style>
-</head>
-<body>
-    <h2>Alteryx to Spark SQL Converter</h2>
-    <form method="post">
-        <label>Enter Alteryx Formula:</label><br>
-        <textarea name="alteryx_formula" required>{{ request.form.get('alteryx_formula', '') }}</textarea>
-        <input type="submit" value="Convert">
-    </form>
-
-    {% if result %}
-    <div class="output">
-        <strong>Spark SQL Output:</strong>
-        <pre>{{ result }}</pre>
-    </div>
-    {% endif %}
-</body>
-</html>
-"""
-
-# ---------------- Flask Route ---------------------
-@app.route("/", methods=["GET", "POST"])
-def index():
-    result = ""
-    if request.method == "POST":
-        formula = request.form.get("alteryx_formula", "")
-        try:
-            result = convert_to_sql(formula)
-        except Exception as e:
-            result = f"❌ Error: {str(e)}"
-    return render_template_string(html_template, result=result)
-
-# ---------------- Main Entry ----------------------
-if __name__ == "__main__":
-    app.run(debug=True)
+print(final)
