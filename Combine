@@ -1,6 +1,75 @@
-Techno-functional developer skilled in Python, Alteryx, and data analytics.
-Builds intelligent tools with a focus on automation, data workflows, and smart solutions.
+import pandas as pd
 
-🌱 Life
-Curious, social, and driven—loves sharing ideas, solving problems, and blending logic with creativity.
-Enjoys listening to music, socializing, and spending quality time with people.
+# Step 1. Load all three files
+bs = pd.read_excel("HK_BS_JUN2512356789.xlsx")       # Balance Sheet
+net = pd.read_excel("HONGKONG_A2709T.xlsx")          # Netting HD/HE
+saga = pd.read_excel("SAGA_MAPPING.xlsx")            # New SAGA mapping file
+
+# --------------------------
+# Step 2. Handle first (HD/HE) netting logic
+# --------------------------
+net_single = net[net['15772'] == 1].copy()
+net_single_he = net_single[['A1010HE', 'A6000HE', '15772']].rename(
+    columns={'A1010HE': 'A1010', 'A6000HE': 'A6000'}
+)
+net_single_hd = net_single[['A1010HD', 'A6000HD', '15772']].rename(
+    columns={'A1010HD': 'A1010', 'A6000HD': 'A6000'}
+)
+net_single_combined = pd.concat([net_single_he, net_single_hd], ignore_index=True)
+net_single_combined['LEG_TYPE'] = 'LEG'
+
+net_double = net[net['15772'] == 2].copy()
+leg1 = net_double[['A1010HE', 'A6000HE', '15772']].rename(
+    columns={'A1010HE': 'A1010', 'A6000HE': 'A6000'}
+)
+leg1['LEG_TYPE'] = 'LEG 1'
+
+leg2 = net_double[['A1010HD', 'A6000HD', '15772']].rename(
+    columns={'A1010HD': 'A1010', 'A6000HD': 'A6000'}
+)
+leg2['LEG_TYPE'] = 'LEG 2'
+
+net_final = pd.concat([net_single_combined, leg1, leg2], ignore_index=True)
+
+# --------------------------
+# Step 3. Handle second (SAGA) mapping logic
+# --------------------------
+def saga_leg(row):
+    if row['98762'] == 2:
+        if pd.notna(row['98763']):
+            return 'LEG 1'
+        elif pd.notna(row['07390P']):
+            return 'LEG 2'
+    return 'LEG'
+
+# Flatten SAGA table for merging
+saga_leg1 = saga[['98763', '98762']].rename(columns={'98763': 'SAGA-B35M'})
+saga_leg1['LEG_TYPE'] = 'LEG 1'
+
+saga_leg2 = saga[['07390P', '98762']].rename(columns={'07390P': 'SAGA-B35M'})
+saga_leg2['LEG_TYPE'] = 'LEG 2'
+
+saga_leg_combined = pd.concat([saga_leg1, saga_leg2], ignore_index=True)
+saga_leg_combined.loc[saga_leg_combined['98762'] != 2, 'LEG_TYPE'] = 'LEG'
+
+# --------------------------
+# Step 4. Merge everything to Balance Sheet
+# --------------------------
+bs_merge1 = bs.merge(net_final[['A1010', 'A6000', 'LEG_TYPE']],
+                     on=['A1010', 'A6000'], how='left')
+
+bs_final = bs_merge1.merge(saga_leg_combined[['SAGA-B35M', 'LEG_TYPE']],
+                           on='SAGA-B35M', how='left', suffixes=('', '_SAGA'))
+
+# --------------------------
+# Step 5. Consolidate final LEG_TYPE column
+# --------------------------
+bs_final['LEG_TYPE_FINAL'] = bs_final['LEG_TYPE'].combine_first(bs_final['LEG_TYPE_SAGA'])
+
+# Save safely
+bs_final.to_excel("HK_BS_JUN2512356789_with_all_legs.xlsx", index=False)
+
+print("✅ Done! File created: HK_BS_JUN2512356789_with_all_legs.xlsx")
+
+
+This is good logic keep it as is just bring i987 and in groupby modify i987 logic
