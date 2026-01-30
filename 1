@@ -1,9 +1,10 @@
-=LET(
- d, STATEMENT!E2,
- r, MIN(IF('SheetA'!A1:Z1000=d, ROW('SheetA'!A1:Z1000))),
- c, MIN(IF('SheetA'!A1:Z1000=d, COLUMN('SheetA'!A1:Z1000))),
- INDEX('SheetA'!A:Z,
-   r + MATCH(TRUE, INDEX(INDEX('SheetA'!A:Z,,c)<>"" , r+1):INDEX(INDEX('SheetA'!A:Z,,c)<>"" , r+5), 0),
-   c
- )
+=AGGREGATE(15,6,ROW('SheetA'!A1:XFD10000)/( 'SheetA'!A1:XFD10000=STATEMENT!E2 ),1)
+
+
+=AGGREGATE(15,6,COLUMN('SheetA'!A1:XFD1)/( 'SheetA'!A1:XFD10000=STATEMENT!E2 ),1)
+
+
+=INDEX('SheetA'!A:XFD,
+ AA1 + MATCH(TRUE, INDEX(INDEX('SheetA'!A:XFD,,AB1)<>"" , AA1+1):INDEX(INDEX('SheetA'!A:XFD,,AB1)<>"" , AA1+5), 0),
+ AB1
 )
