@@ -1,8 +1,1 @@
-=LET(
-    targetDate, STATEMENT!$E$2,
-    dateRow, 'A'!$8:$8,
-    colIndex, MATCH(targetDate, dateRow, 0),
-    dataRange, INDEX('A'!$9:$13, 0, colIndex),
-    result, INDEX(dataRange, MATCH(FALSE, ISBLANK(dataRange), 0)),
-    IFERROR(result, "Not Present")
-)
+=INDEX('A'!9:13, MATCH(TRUE, INDEX('A'!9:13, 0, MATCH(STATEMENT!$E$2, 'A'!$8:$8, 0))<>"", 0), MATCH(STATEMENT!$E$2, 'A'!$8:$8, 0))
