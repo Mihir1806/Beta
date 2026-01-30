@@ -1,10 +1,10 @@
-=INDEX(A!$A$10:$Z$14,
- MATCH(TRUE,
-  INDEX(A!$A$10:$Z$14<>"",
-   0,
-   MATCH(DATE(MID(E2,1,4),MID(E2,6,2),MID(E2,9,2)),A!$A$9:$Z$9,0)
-  ),
-  0
- ),
- MATCH(DATE(MID(E2,1,4),MID(E2,6,2),MID(E2,9,2)),A!$A$9:$Z$9,0)
+=LET(
+ d, STATEMENT!E2,
+ pos, XMATCH(d, 'SheetA'!A:Z),
+ col, MOD(pos-1, COLUMNS('SheetA'!A:Z))+1,
+ row, INT((pos-1)/COLUMNS('SheetA'!A:Z))+1,
+ INDEX('SheetA'!A:Z,
+   row + MATCH(TRUE, INDEX(INDEX('SheetA'!A:Z,,col)<>"" , row+1):INDEX(INDEX('SheetA'!A:Z,,col)<>"" , row+5), 0),
+   col
+ )
 )
