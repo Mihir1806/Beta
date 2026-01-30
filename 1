@@ -1,20 +1,13 @@
 =LET(
-    searchDate, STATEMENT!$E$2,
-    dataRange, 'A'!$A$1:$ZZ$500,
-    colMatch, SUMPRODUCT((dataRange=searchDate)*COLUMN(dataRange)),
-    rowMatch, SUMPRODUCT((dataRange=searchDate)*ROW(dataRange)),
-    firstVal, INDEX('A'!$A$1:$ZZ$500, rowMatch+1, colMatch),
-    secondVal, INDEX('A'!$A$1:$ZZ$500, rowMatch+2, colMatch),
-    thirdVal, INDEX('A'!$A$1:$ZZ$500, rowMatch+3, colMatch),
-    IF(firstVal<>"", firstVal, IF(secondVal<>"", secondVal, IF(thirdVal<>"", thirdVal, "Not Found")))
-)
-
-
-
-=LET(
-    searchDate, STATEMENT!$E$2,
-    targetCol, MAX(BYCOL('A'!$A$1:$Z$100, LAMBDA(c, IF(OR(c=searchDate), COLUMN(c), 0)))),
-    targetRow, MAX(BYROW('A'!$A$1:$Z$100, LAMBDA(r, IF(OR(r=searchDate), ROW(r), 0)))),
-    resultRange, INDEX('A'!$1:$500, targetRow+1, targetCol):INDEX('A'!$1:$500, targetRow+5, targetCol),
-    @FILTER(resultRange, resultRange<>"")
+    target, STATEMENT!$E$2,
+    altTarget, TEXT(STATEMENT!$E$2, "yyyy-mm-dd"),
+    searchRange, 'A'!$A$1:$ZZ$500,
+    
+    colIdx, MAX(IFERROR(IF(searchRange=target, COLUMN(searchRange), IF(searchRange=altTarget, COLUMN(searchRange), 0)), 0)),
+    rowIdx, MAX(IFERROR(IF(searchRange=target, ROW(searchRange), IF(searchRange=altTarget, ROW(searchRange), 0)), 0)),
+    
+    foundCol, INDEX('A'!$1:$1000, 0, colIdx),
+    result, XLOOKUP(TRUE, INDEX(foundCol, rowIdx+1):INDEX(foundCol, rowIdx+5) <> "", INDEX(foundCol, rowIdx+1):INDEX(foundCol, rowIdx+5), "Not Found", 0),
+    
+    result
 )
