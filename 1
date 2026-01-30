@@ -1,10 +1,9 @@
 =LET(
  d, STATEMENT!E2,
- pos, XMATCH(d, 'SheetA'!A:Z),
- col, MOD(pos-1, COLUMNS('SheetA'!A:Z))+1,
- row, INT((pos-1)/COLUMNS('SheetA'!A:Z))+1,
+ r, MIN(IF('SheetA'!A1:Z1000=d, ROW('SheetA'!A1:Z1000))),
+ c, MIN(IF('SheetA'!A1:Z1000=d, COLUMN('SheetA'!A1:Z1000))),
  INDEX('SheetA'!A:Z,
-   row + MATCH(TRUE, INDEX(INDEX('SheetA'!A:Z,,col)<>"" , row+1):INDEX(INDEX('SheetA'!A:Z,,col)<>"" , row+5), 0),
-   col
+   r + MATCH(TRUE, INDEX(INDEX('SheetA'!A:Z,,c)<>"" , r+1):INDEX(INDEX('SheetA'!A:Z,,c)<>"" , r+5), 0),
+   c
  )
 )
