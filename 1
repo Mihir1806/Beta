@@ -6,8 +6,8 @@
     colIdx, MAX(IFERROR(IF(searchRange=target, COLUMN(searchRange), IF(searchRange=altTarget, COLUMN(searchRange), 0)), 0)),
     rowIdx, MAX(IFERROR(IF(searchRange=target, ROW(searchRange), IF(searchRange=altTarget, ROW(searchRange), 0)), 0)),
     
-    foundCol, INDEX('A'!$1:$1000, 0, colIdx),
-    result, XLOOKUP(TRUE, INDEX(foundCol, rowIdx+1):INDEX(foundCol, rowIdx+5) <> "", INDEX(foundCol, rowIdx+1):INDEX(foundCol, rowIdx+5), "Not Found", 0),
+    columnData, INDEX('A'!$A:$ZZ, 0, colIdx),
+    belowDate, INDEX(columnData, rowIdx + 1):INDEX(columnData, 1048576),
     
-    result
+    XLOOKUP(TRUE, (belowDate <> "") * (NOT(ISERROR(belowDate))), belowDate, "No Value Found", 0)
 )
