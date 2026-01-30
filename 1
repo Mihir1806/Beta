@@ -1,6 +1,10 @@
-=LET(
-  d, DATE(MID(E2,1,4),MID(E2,6,2),MID(E2,9,2)),
-  c, MATCH(d, A!$A$9:$Z$9, 0),
-  r, A!$A$10:$Z$14,
-  INDEX(r, MATCH(TRUE, INDEX(INDEX(r,,c)<>"",0), 0), c)
+=INDEX(A!$A$10:$Z$14,
+ MATCH(TRUE,
+  INDEX(A!$A$10:$Z$14<>"",
+   0,
+   MATCH(DATE(MID(E2,1,4),MID(E2,6,2),MID(E2,9,2)),A!$A$9:$Z$9,0)
+  ),
+  0
+ ),
+ MATCH(DATE(MID(E2,1,4),MID(E2,6,2),MID(E2,9,2)),A!$A$9:$Z$9,0)
 )
