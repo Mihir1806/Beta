@@ -1,13 +1,14 @@
 =LET(
-    target, STATEMENT!$E$2,
-    altTarget, TEXT(STATEMENT!$E$2, "yyyy-mm-dd"),
-    searchRange, 'A'!$A$1:$ZZ$500,
+    searchDate, TEXT(STATEMENT!$E$2, "yyyy-mm-dd"),
+    dataSheet, 'A'!$A$1:$ZZ$1000,
     
-    colIdx, MAX(IFERROR(IF(searchRange=target, COLUMN(searchRange), IF(searchRange=altTarget, COLUMN(searchRange), 0)), 0)),
-    rowIdx, MAX(IFERROR(IF(searchRange=target, ROW(searchRange), IF(searchRange=altTarget, ROW(searchRange), 0)), 0)),
+    colIdx, MAX(IFERROR(IF(TEXT(dataSheet, "yyyy-mm-dd")=searchDate, COLUMN(dataSheet), 0), 0)),
+    rowIdx, MAX(IFERROR(IF(TEXT(dataSheet, "yyyy-mm-dd")=searchDate, ROW(dataSheet), 0), 0)),
     
     columnData, INDEX('A'!$A:$ZZ, 0, colIdx),
-    belowDate, INDEX(columnData, rowIdx + 1):INDEX(columnData, 1048576),
+    belowDate, INDEX(columnData, rowIdx + 1):INDEX(columnData, 1000),
     
-    XLOOKUP(TRUE, (belowDate <> "") * (NOT(ISERROR(belowDate))), belowDate, "No Value Found", 0)
+    finalValue, XLOOKUP(TRUE, (belowDate <> "") * (NOT(ISERROR(belowDate))), belowDate, "Still Not Found", 0),
+    
+    IF(colIdx=0, "Date Not Found on Sheet A", finalValue)
 )
