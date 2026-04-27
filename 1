@@ -4,8 +4,8 @@ Sub Format_Result_Tab()
     Set ws = ThisWorkbook.Sheets("Result")
     
     Application.ScreenUpdating = False
-    
-    ' Refresh only when macro runs (no background)
+
+    ' Refresh only when macro runs (no background wait)
     Dim conn As WorkbookConnection
     For Each conn In ThisWorkbook.Connections
         On Error Resume Next
@@ -13,17 +13,28 @@ Sub Format_Result_Tab()
         conn.ODBCConnection.BackgroundQuery = False
         On Error GoTo 0
     Next conn
-    
     ThisWorkbook.RefreshAll
 
-    ' Formatting
     With ws
+        ' Keep only A:J (delete rest)
+        .Columns("K:XFD").Delete
+        
+        ' Formatting
         .Columns("A:D").NumberFormat = "@"
-        .Columns("E:E").NumberFormat = "dd-mmm-yyyy"
         .Columns("F:J").NumberFormat = "@"
     End With
 
-    ' Save Result sheet as CSV
+    ' Convert Column E to yyyy-mm-dd (TEXT for CSV)
+    Dim lastRow As Long, cell As Range
+    lastRow = ws.Cells(ws.Rows.Count, "E").End(xlUp).Row
+    
+    For Each cell In ws.Range("E2:E" & lastRow)
+        If IsDate(cell.Value) Then
+            cell.Value = Format(cell.Value, "yyyy-mm-dd")
+        End If
+    Next cell
+
+    ' Save as CSV
     Dim tempWB As Workbook
     ws.Copy
     Set tempWB = ActiveWorkbook
