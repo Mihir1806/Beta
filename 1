@@ -1,1 +1,32 @@
-You are an expert ETL automation developer and XML parser specializing in IBM DataStage (DSX/XML). I will provide multiple XML files representing DataStage jobs including parent and child workflows. Your goal is to build a complete, production-grade technical specification generator that reads all XML files, understands their structure dynamically, extracts all relevant information, and generates a comprehensive Excel file with multiple sheets. Do not start coding immediately. First read all XML files, analyze their structure deeply, identify patterns and variations, and build a flexible parsing strategy. Your solution must adapt to structure and not rely on fixed assumptions. From the XMLs, identify job definitions, stage definitions such as StageRecord or Stage or Node, link definitions, column definitions, SQL queries, join conditions, lookup logic, transformer derivations, aggregations, table I/O metadata including column name datatype length nullable and key, constraints, parameters, environment variables, sequence jobs and triggers, parent child job dependencies, and any custom or uncommon tags. Also detect nested structures, collections, properties, attributes patterns, and reusable components. After understanding the structure, write Python code that works across multiple XML files, automatically detects structures dynamically, handles variations in tag naming, recursively processes parent child jobs, and avoids hardcoding wherever possible. Generate one Excel file with multiple sheets including Job Summary, Stage Details, Data Flow Links, Table I O Structure, Transformations, Joins and Lookups, Aggregations, SQL Extraction, and Parent Child Dependencies with all relevant fields. Additionally create a mandatory sheet called Additional Information or Unmapped Data which captures any XML tags or attributes not mapped to existing sheets, unused properties, custom stage configurations, unknown or new structures, metadata not categorized elsewhere, debug or hidden configurations, environment variables, and parameter sets. This sheet must have columns Job Name, Section such as Stage Link Job or Global, Element Type tag name, Attribute Name, Attribute Value, and Raw XML Snippet if needed. Also include advanced features such as column level lineage mapping source to target, SQL extraction from database stages, and identification of join, lookup, transformer, and aggregator stages. The output must be clean and structured and should avoid dumping raw XML unless necessary. The code must be written in Python using xml.etree.ElementTree or lxml, pandas, and openpyxl or xlsxwriter. It should include modular functions such as parse_jobs, parse_stages, parse_links, parse_columns, extract_sql, extract_transformations, build_lineage, extract_additional_info, and export_to_excel. The solution must automatically scan a folder, handle missing or optional tags gracefully, and be robust and production ready. Return a fully working Python script with clean modular readable code, dynamic parsing logic, and Excel output containing all sheets including the Additional Information sheet. The system must behave like a smart analyzer that learns XML structure, extracts everything meaningful, does not miss hidden information, produces complete ETL documentation, and works across different DataStage job formats. If any new or unknown pattern is found do not ignore it and capture it in the Additional Information sheet.
+Sub Format_Result_Tab()
+
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets("Result")
+    
+    Application.ScreenUpdating = False
+    
+    ' Refresh all connections ONLY when macro runs (no background wait)
+    Dim conn As WorkbookConnection
+    For Each conn In ThisWorkbook.Connections
+        On Error Resume Next
+        conn.OLEDBConnection.BackgroundQuery = False
+        conn.ODBCConnection.BackgroundQuery = False
+        On Error GoTo 0
+    Next conn
+    
+    ThisWorkbook.RefreshAll
+
+    With ws
+        ' Columns A to D as Text
+        .Columns("A:D").NumberFormat = "@"
+        
+        ' Column E as Medium Date
+        .Columns("E:E").NumberFormat = "dd-mmm-yyyy"
+        
+        ' Columns F to J as Text
+        .Columns("F:J").NumberFormat = "@"
+    End With
+
+    Application.ScreenUpdating = True
+
+End Sub
