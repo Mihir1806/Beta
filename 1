@@ -5,6 +5,7 @@ Sub Format_Result_Tab()
     Dim tempWB As Workbook
     Dim tempWS As Worksheet
     Dim conn As WorkbookConnection
+    Dim cell As Range
 
     Set ws = ThisWorkbook.Sheets("Result")
 
@@ -29,11 +30,13 @@ Sub Format_Result_Tab()
         .Columns("F:J").NumberFormat = "@"
     End With
 
-    ' Convert Column E to yyyy-mm-dd (TEXT for CSV) safely
+    ' Convert Column E to yyyy-mm-dd (FORCE TEXT for CSV)
     If lastRow >= 2 Then
-        ws.Range("E2:E" & lastRow).NumberFormat = "@"
-        ws.Range("E2:E" & lastRow).Value = ws.Evaluate( _
-            "IF(E2:E" & lastRow & "<>"""",TEXT(E2:E" & lastRow & ",""yyyy-mm-dd""),"""")")
+        For Each cell In ws.Range("E2:E" & lastRow)
+            If IsDate(cell.Value) Then
+                cell.Value = "'" & Format(cell.Value, "yyyy-mm-dd")
+            End If
+        Next cell
     End If
 
     ' Create temp workbook and copy only A:J
