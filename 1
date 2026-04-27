@@ -5,7 +5,7 @@ Sub Format_Result_Tab()
     
     Application.ScreenUpdating = False
     
-    ' Refresh all connections ONLY when macro runs (no background wait)
+    ' Refresh only when macro runs (no background)
     Dim conn As WorkbookConnection
     For Each conn In ThisWorkbook.Connections
         On Error Resume Next
@@ -16,16 +16,22 @@ Sub Format_Result_Tab()
     
     ThisWorkbook.RefreshAll
 
+    ' Formatting
     With ws
-        ' Columns A to D as Text
         .Columns("A:D").NumberFormat = "@"
-        
-        ' Column E as Medium Date
         .Columns("E:E").NumberFormat = "dd-mmm-yyyy"
-        
-        ' Columns F to J as Text
         .Columns("F:J").NumberFormat = "@"
     End With
+
+    ' Save Result sheet as CSV
+    Dim tempWB As Workbook
+    ws.Copy
+    Set tempWB = ActiveWorkbook
+    
+    Application.DisplayAlerts = False
+    tempWB.SaveAs Filename:=ThisWorkbook.Path & "\Result.csv", FileFormat:=xlCSV
+    tempWB.Close False
+    Application.DisplayAlerts = True
 
     Application.ScreenUpdating = True
 
