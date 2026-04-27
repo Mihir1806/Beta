@@ -1,12 +1,17 @@
 Sub Format_Result_Tab()
 
     Dim ws As Worksheet
+    Dim lastRow As Long
+    Dim tempWB As Workbook
+    Dim tempWS As Worksheet
+    Dim conn As WorkbookConnection
+
     Set ws = ThisWorkbook.Sheets("Result")
-    
+
     Application.ScreenUpdating = False
+    Application.DisplayAlerts = False
 
     ' Refresh only when macro runs (no background wait)
-    Dim conn As WorkbookConnection
     For Each conn In ThisWorkbook.Connections
         On Error Resume Next
         conn.OLEDBConnection.BackgroundQuery = False
@@ -15,35 +20,34 @@ Sub Format_Result_Tab()
     Next conn
     ThisWorkbook.RefreshAll
 
+    ' Find last row in Column E
+    lastRow = ws.Cells(ws.Rows.Count, "E").End(xlUp).Row
+
+    ' Formatting
     With ws
-        ' Keep only A:J (delete rest)
-        .Columns("K:XFD").Delete
-        
-        ' Formatting
         .Columns("A:D").NumberFormat = "@"
         .Columns("F:J").NumberFormat = "@"
     End With
 
-    ' Convert Column E to yyyy-mm-dd (TEXT for CSV)
-    Dim lastRow As Long, cell As Range
-    lastRow = ws.Cells(ws.Rows.Count, "E").End(xlUp).Row
-    
-    For Each cell In ws.Range("E2:E" & lastRow)
-        If IsDate(cell.Value) Then
-            cell.Value = Format(cell.Value, "yyyy-mm-dd")
-        End If
-    Next cell
+    ' Convert Column E to yyyy-mm-dd (TEXT for CSV) safely
+    If lastRow >= 2 Then
+        ws.Range("E2:E" & lastRow).NumberFormat = "@"
+        ws.Range("E2:E" & lastRow).Value = ws.Evaluate( _
+            "IF(E2:E" & lastRow & "<>"""",TEXT(E2:E" & lastRow & ",""yyyy-mm-dd""),"""")")
+    End If
+
+    ' Create temp workbook and copy only A:J
+    Set tempWB = Workbooks.Add
+    Set tempWS = tempWB.Sheets(1)
+
+    ws.Range("A:J").Copy
+    tempWS.Range("A1").PasteSpecial xlPasteValues
 
     ' Save as CSV
-    Dim tempWB As Workbook
-    ws.Copy
-    Set tempWB = ActiveWorkbook
-    
-    Application.DisplayAlerts = False
     tempWB.SaveAs Filename:=ThisWorkbook.Path & "\Result.csv", FileFormat:=xlCSV
     tempWB.Close False
-    Application.DisplayAlerts = True
 
+    Application.DisplayAlerts = True
     Application.ScreenUpdating = True
 
 End Sub
