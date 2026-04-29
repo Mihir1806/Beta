@@ -3,38 +3,39 @@ Sub Export_SDMX_CSV()
     Dim ws As Worksheet
     Dim lastRow As Long, i As Long
     Dim filePath As String
-    Dim line As String
-    Dim fso As Object, file As Object
+    Dim fileNum As Integer
 
     Set ws = ThisWorkbook.Sheets("Result")
 
+    ' Safe file path
+    If ThisWorkbook.Path = "" Then
+        filePath = Environ("USERPROFILE") & "\Desktop\Result_SDMX.csv"
+    Else
+        filePath = ThisWorkbook.Path & "\Result_SDMX.csv"
+    End If
+
     lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
-    filePath = ThisWorkbook.Path & "\Result_SDMX.csv"
 
-    Set fso = CreateObject("Scripting.FileSystemObject")
-    Set file = fso.CreateTextFile(filePath, True, False)
+    fileNum = FreeFile
+    Open filePath For Output As #fileNum
 
-    ' Write Header (SDMX format)
-    file.WriteLine "DATAFLOW,REF_AREA,TIME_PERIOD,OBS_VALUE,UNIT"
+    ' Header
+    Print #fileNum, "DATAFLOW,REF_AREA,TIME_PERIOD,OBS_VALUE,UNIT"
 
-    ' Loop data
+    ' Data
     For i = 2 To lastRow
-        
         If ws.Cells(i, "E").Value <> "" Then
-            
-            line = ws.Cells(i, "A").Value & "," & _
-                   "IND" & "," & _
-                   Format(ws.Cells(i, "E").Value, "yyyy-mm-dd") & "," & _
-                   ws.Cells(i, "D").Value & "," & _
-                   ws.Cells(i, "I").Value
-
-            file.WriteLine line
-        
+            Print #fileNum, _
+            ws.Cells(i, "A").Value & "," & _
+            "IND" & "," & _
+            Format(ws.Cells(i, "E").Value, "yyyy-mm-dd") & "," & _
+            ws.Cells(i, "D").Value & "," & _
+            ws.Cells(i, "I").Value
         End If
     Next i
 
-    file.Close
+    Close #fileNum
 
-    MsgBox "SDMX CSV Created Successfully!"
+    MsgBox "SDMX CSV created successfully!"
 
 End Sub
