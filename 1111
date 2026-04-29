@@ -1,38 +1,52 @@
-import pandas as pd
+Sub Export_Full_To_CSV()
 
-# Step 1: Load both files
-bs = pd.read_excel("HK_BS_JUN2512356789.xlsx")      # Transaction (balance sheet)
-net = pd.read_excel("HONGKONG_A2709T.xlsx")         # Netting info (legs)
+    Dim ws As Worksheet
+    Dim tempWB As Workbook
+    Dim tempWS As Worksheet
+    Dim lastRow As Long
+    Dim lastCol As Long
+    Dim filePath As String
+    Dim r As Long, c As Long
 
-# Step 2: Prepare HD and HE (two leg columns)
-net_hd = net[['A1010HD', 'A6000HD', '15772', '58762']].rename(
-    columns={'A1010HD': 'A1010', 'A6000HD': 'A6000'}
-)
-net_he = net[['A1010HE', 'A6000HE', '15772', '58762']].rename(
-    columns={'A1010HE': 'A1010', 'A6000HE': 'A6000'}
-)
+    ' Sheet name
+    Set ws = ThisWorkbook.Sheets("Result_V2")
 
-# Step 3: Combine HD and HE together
-net_combined = pd.concat([net_hd, net_he], ignore_index=True)
+    ' Find last row & column
+    lastRow = ws.Cells.Find("*", SearchOrder:=xlByRows, SearchDirection:=xlPrevious).Row
+    lastCol = ws.Cells.Find("*", SearchOrder:=xlByColumns, SearchDirection:=xlPrevious).Column
 
-# Step 4: Apply full leg logic
-def get_leg_type(row):
-    if row['15772'] == 1:
-        return "LEG"
-    elif row['15772'] == 2:
-        if row['58762'] == 3:
-            return "LEG 1"
-        elif row['58762'] == 5:
-            return "LEG 2"
-    return None
+    ' Create temp workbook
+    Set tempWB = Workbooks.Add
+    Set tempWS = tempWB.Sheets(1)
 
-net_combined['LEG_TYPE'] = net_combined.apply(get_leg_type, axis=1)
+    ' Copy full data
+    ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol)).Copy
+    tempWS.Range("A1").PasteSpecial xlPasteValues
 
-# Step 5: Merge LEG_TYPE into the Balance Sheet without changing original data
-bs_with_leg = bs.merge(net_combined[['A1010', 'A6000', 'LEG_TYPE']],
-                       on=['A1010', 'A6000'], how='left')
+    ' Convert all dates to YYYY-MM-DD
+    For r = 2 To lastRow
+        For c = 1 To lastCol
+            If IsDate(tempWS.Cells(r, c).Value) Then
+                tempWS.Cells(r, c).Value = Format(tempWS.Cells(r, c).Value, "yyyy-mm-dd")
+            End If
+        Next c
+    Next r
 
-# Step 6: Save safely as a new file
-bs_with_leg.to_excel("HK_BS_JUN2512356789_with_legs.xlsx", index=False)
+    ' Convert all to text (prevents Excel reformat)
+    tempWS.Cells.NumberFormat = "@"
 
-print("✅ Done! Created file: HK_BS_JUN2512356789_with_legs.xlsx")
+    ' File path
+    filePath = ThisWorkbook.Path & "\Output_Full.csv"
+
+    Application.DisplayAlerts = False
+
+    ' Save as CSV
+    tempWB.SaveAs Filename:=filePath, FileFormat:=xlCSV, CreateBackup:=False
+
+    tempWB.Close False
+
+    Application.DisplayAlerts = True
+
+    MsgBox "Full CSV Created Successfully!"
+
+End Sub
