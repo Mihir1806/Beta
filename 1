@@ -1,56 +1,40 @@
-Sub Format_Result_Tab()
+Sub Export_SDMX_CSV()
 
     Dim ws As Worksheet
-    Dim lastRow As Long
-    Dim tempWB As Workbook
-    Dim tempWS As Worksheet
-    Dim conn As WorkbookConnection
-    Dim cell As Range
+    Dim lastRow As Long, i As Long
+    Dim filePath As String
+    Dim line As String
+    Dim fso As Object, file As Object
 
     Set ws = ThisWorkbook.Sheets("Result")
 
-    Application.ScreenUpdating = False
-    Application.DisplayAlerts = False
+    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
+    filePath = ThisWorkbook.Path & "\Result_SDMX.csv"
 
-    ' Refresh only when macro runs (no background wait)
-    For Each conn In ThisWorkbook.Connections
-        On Error Resume Next
-        conn.OLEDBConnection.BackgroundQuery = False
-        conn.ODBCConnection.BackgroundQuery = False
-        On Error GoTo 0
-    Next conn
-    ThisWorkbook.RefreshAll
+    Set fso = CreateObject("Scripting.FileSystemObject")
+    Set file = fso.CreateTextFile(filePath, True, False)
 
-    ' Find last row in Column E
-    lastRow = ws.Cells(ws.Rows.Count, "E").End(xlUp).Row
+    ' Write Header (SDMX format)
+    file.WriteLine "DATAFLOW,REF_AREA,TIME_PERIOD,OBS_VALUE,UNIT"
 
-    ' Formatting
-    With ws
-        .Columns("A:D").NumberFormat = "@"
-        .Columns("F:J").NumberFormat = "@"
-    End With
+    ' Loop data
+    For i = 2 To lastRow
+        
+        If ws.Cells(i, "E").Value <> "" Then
+            
+            line = ws.Cells(i, "A").Value & "," & _
+                   "IND" & "," & _
+                   Format(ws.Cells(i, "E").Value, "yyyy-mm-dd") & "," & _
+                   ws.Cells(i, "D").Value & "," & _
+                   ws.Cells(i, "I").Value
 
-    ' Convert Column E to yyyy-mm-dd (FORCE TEXT for CSV)
-    If lastRow >= 2 Then
-        For Each cell In ws.Range("E2:E" & lastRow)
-            If IsDate(cell.Value) Then
-                cell.Value = "'" & Format(cell.Value, "yyyy-mm-dd")
-            End If
-        Next cell
-    End If
+            file.WriteLine line
+        
+        End If
+    Next i
 
-    ' Create temp workbook and copy only A:J
-    Set tempWB = Workbooks.Add
-    Set tempWS = tempWB.Sheets(1)
+    file.Close
 
-    ws.Range("A:J").Copy
-    tempWS.Range("A1").PasteSpecial xlPasteValues
-
-    ' Save as CSV
-    tempWB.SaveAs Filename:=ThisWorkbook.Path & "\Result.csv", FileFormat:=xlCSV
-    tempWB.Close False
-
-    Application.DisplayAlerts = True
-    Application.ScreenUpdating = True
+    MsgBox "SDMX CSV Created Successfully!"
 
 End Sub
