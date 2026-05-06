@@ -1,42 +1,9 @@
-Sub Export_SDMX_CSV()
-
-    Dim ws As Worksheet
-    Dim lastRow As Long, i As Long
-    Dim filePath As String
-    Dim fileNum As Integer
-
-    Set ws = ThisWorkbook.Sheets("Result_V2")
-
-    ' Let user choose save location (NO ERROR POSSIBLE)
-    filePath = Application.GetSaveAsFilename( _
-                FileFilter:="CSV Files (*.csv), *.csv", _
-                Title:="Save SDMX CSV")
-
-    ' If user cancels
-    If filePath = "False" Then Exit Sub
-
-    lastRow = ws.Cells(ws.Rows.Count, "A").End(xlUp).Row
-
-    fileNum = FreeFile
-    Open filePath For Output As #fileNum
-
-    ' Header
-    Print #fileNum, "DATAFLOW,REF_AREA,TIME_PERIOD,OBS_VALUE,UNIT"
-
-    ' Data
-    For i = 2 To lastRow
-        If ws.Cells(i, "E").Value <> "" Then
-            Print #fileNum, _
-                ws.Cells(i, "A").Value & "," & _
-                "IND" & "," & _
-                Format(ws.Cells(i, "E").Value, "yyyy-mm-dd") & "," & _
-                ws.Cells(i, "D").Value & "," & _
-                ws.Cells(i, "I").Value
-        End If
-    Next i
-
-    Close #fileNum
-
-    MsgBox "SDMX CSV created successfully!"
-
-End Sub
+'{
+  "model": "' + [Model] + '",
+  "messages": [
+    {
+      "role": "user",
+      "content": "' + [Prompt] + '"
+    }
+  ]
+}'
