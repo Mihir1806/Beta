@@ -1,52 +1,487 @@
-Sub Export_Full_To_CSV()
+You are a senior AI architect and full-stack engineer.
 
-    Dim ws As Worksheet
-    Dim tempWB As Workbook
-    Dim tempWS As Worksheet
-    Dim lastRow As Long
-    Dim lastCol As Long
-    Dim filePath As String
-    Dim r As Long, c As Long
+Build a complete local-hosted Multi-Agent AI Business OS similar to Phase AI, where I can create unlimited custom AI agents and define exactly what each agent does.
 
-    ' Sheet name
-    Set ws = ThisWorkbook.Sheets("Result_V2")
+========================================================
 
-    ' Find last row & column
-    lastRow = ws.Cells.Find("*", SearchOrder:=xlByRows, SearchDirection:=xlPrevious).Row
-    lastCol = ws.Cells.Find("*", SearchOrder:=xlByColumns, SearchDirection:=xlPrevious).Column
+OBJECTIVE
 
-    ' Create temp workbook
-    Set tempWB = Workbooks.Add
-    Set tempWS = tempWB.Sheets(1)
+========================================================
 
-    ' Copy full data
-    ws.Range(ws.Cells(1, 1), ws.Cells(lastRow, lastCol)).Copy
-    tempWS.Range("A1").PasteSpecial xlPasteValues
+Create a production-ready application that runs entirely on localhost and allows me to:
 
-    ' Convert all dates to YYYY-MM-DD
-    For r = 2 To lastRow
-        For c = 1 To lastCol
-            If IsDate(tempWS.Cells(r, c).Value) Then
-                tempWS.Cells(r, c).Value = Format(tempWS.Cells(r, c).Value, "yyyy-mm-dd")
-            End If
-        Next c
-    Next r
+1. Create unlimited AI agents.
 
-    ' Convert all to text (prevents Excel reformat)
-    tempWS.Cells.NumberFormat = "@"
+2. Define each agent’s:
 
-    ' File path
-    filePath = ThisWorkbook.Path & "\Output_Full.csv"
+   - Name
 
-    Application.DisplayAlerts = False
+   - Role
 
-    ' Save as CSV
-    tempWB.SaveAs Filename:=filePath, FileFormat:=xlCSV, CreateBackup:=False
+   - Goal
 
-    tempWB.Close False
+   - System prompt
 
-    Application.DisplayAlerts = True
+   - Tools
 
-    MsgBox "Full CSV Created Successfully!"
+   - Memory settings
 
-End Sub
+   - Permissions
+
+   - Color/icon
+
+3. Chat with any agent.
+
+4. Allow agents to collaborate with each other.
+
+5. Create a CEO Agent that coordinates all other agents.
+
+6. Generate and manage task queues.
+
+7. Require approval before executing actions.
+
+8. Upload files for analysis (Excel, CSV, PDF, DOCX, images).
+
+9. Store chat history, tasks, and memory.
+
+10. Connect to any LLM using my API key and base URL.
+
+11. Display a beautiful dark-themed dashboard similar to Phase AI.
+
+12. Run completely on localhost.
+
+========================================================
+
+TECHNOLOGY STACK
+
+========================================================
+
+Backend:
+
+- Python 3.12+
+
+- FastAPI
+
+- SQLAlchemy
+
+- PostgreSQL (SQLite fallback)
+
+- Redis
+
+- Celery
+
+- CrewAI (or LangGraph if better)
+
+- LiteLLM
+
+- Pandas
+
+- OpenPyXL
+
+- PyPDF
+
+- python-docx
+
+Frontend:
+
+- Next.js 15
+
+- React
+
+- TypeScript
+
+- Tailwind CSS
+
+- shadcn/ui
+
+- Recharts
+
+- Framer Motion
+
+Authentication:
+
+- Local username/password
+
+Deployment:
+
+- Docker Compose
+
+- Runs on localhost
+
+========================================================
+
+CORE MODULES
+
+========================================================
+
+1. Agent Builder
+
+2. CEO Agent Orchestrator
+
+3. Department Agents Dashboard
+
+4. Chat Interface
+
+5. Task Queue and Approval Center
+
+6. File Upload and Knowledge Base
+
+7. Memory and Conversation History
+
+8. Settings for API keys and base URL
+
+9. Analytics Dashboard
+
+10. Workflow Execution Logs
+
+========================================================
+
+DEFAULT AGENTS
+
+========================================================
+
+Create these agents by default:
+
+- CEO Agent
+
+- HR Agent
+
+- Sales Agent
+
+- Finance Agent
+
+- Marketing Agent
+
+- Operations Agent
+
+- Development Agent
+
+- Job Search Agent
+
+- Resume Agent
+
+- Interview Preparation Agent
+
+- Alteryx Agent
+
+- Python Coding Agent
+
+- Financial Planning Agent
+
+========================================================
+
+AGENT CAPABILITIES
+
+========================================================
+
+Each agent must support:
+
+- System prompts
+
+- Tool calling
+
+- Memory
+
+- Inter-agent messaging
+
+- Task planning
+
+- Status (Idle, Working, Waiting, Error)
+
+- Color and icon customization
+
+========================================================
+
+CEO AGENT
+
+========================================================
+
+The CEO Agent must:
+
+- Analyze all agents and their data
+
+- Create a morning analysis summary
+
+- Propose tasks
+
+- Assign tasks to agents
+
+- Ask for approval before execution
+
+- Track progress
+
+========================================================
+
+TASK MANAGEMENT
+
+========================================================
+
+Implement:
+
+- Task queue
+
+- Priority levels
+
+- Due dates
+
+- Assigned agent
+
+- Approval workflow
+
+- Execution logs
+
+- Retry on failure
+
+========================================================
+
+DATABASE TABLES
+
+========================================================
+
+Include tables for:
+
+- users
+
+- agents
+
+- tools
+
+- conversations
+
+- messages
+
+- tasks
+
+- approvals
+
+- files
+
+- memories
+
+- settings
+
+- logs
+
+========================================================
+
+API ENDPOINTS
+
+========================================================
+
+Create REST and WebSocket endpoints for:
+
+- Agent CRUD
+
+- Chat
+
+- Task management
+
+- File upload
+
+- Settings
+
+- Real-time updates
+
+========================================================
+
+FRONTEND PAGES
+
+========================================================
+
+1. Dashboard
+
+2. Agent Builder
+
+3. Agent Detail/Chat
+
+4. Task Queue
+
+5. Files/Knowledge Base
+
+6. Analytics
+
+7. Settings
+
+========================================================
+
+UI REQUIREMENTS
+
+========================================================
+
+- Modern dark theme
+
+- Glassmorphism cards
+
+- Animated status indicators
+
+- Department agent cards
+
+- Real-time updates
+
+- Responsive design
+
+- Dashboard visually similar to Phase AI
+
+========================================================
+
+FILE PROCESSING
+
+========================================================
+
+Support:
+
+- Excel and CSV analysis
+
+- PDF text extraction
+
+- DOCX extraction
+
+- Image OCR (optional)
+
+- Embedding and retrieval
+
+========================================================
+
+LLM CONFIGURATION
+
+========================================================
+
+Allow the user to enter:
+
+- Provider name
+
+- Base URL
+
+- API key
+
+- Model name
+
+- Temperature
+
+- Max tokens
+
+Use LiteLLM so any OpenAI-compatible endpoint can be used.
+
+========================================================
+
+MEMORY
+
+========================================================
+
+Provide:
+
+- Short-term conversation memory
+
+- Long-term vector memory
+
+- Agent-specific memory
+
+- Searchable memory
+
+========================================================
+
+ANALYTICS
+
+========================================================
+
+Show:
+
+- Tasks completed
+
+- Agent utilization
+
+- Token usage
+
+- Cost estimates
+
+- Success/failure rates
+
+========================================================
+
+DOCKER SETUP
+
+========================================================
+
+Provide:
+
+- Dockerfiles
+
+- docker-compose.yml
+
+- .env.example
+
+- Setup scripts
+
+========================================================
+
+OUTPUT FORMAT
+
+========================================================
+
+Generate the complete project with:
+
+- Fully working backend code
+
+- Fully working frontend code
+
+- Database models
+
+- API routes
+
+- Agent orchestration logic
+
+- Docker configuration
+
+- README with setup instructions
+
+========================================================
+
+CODE QUALITY
+
+========================================================
+
+Requirements:
+
+- Modular architecture
+
+- Type hints
+
+- Error handling
+
+- Logging
+
+- Comments
+
+- Production-ready structure
+
+========================================================
+
+SUCCESS CRITERIA
+
+========================================================
+
+After running:
+
+docker-compose up --build
+
+I can open:
+
+- Frontend: http://localhost:3000
+
+- Backend API docs: http://localhost:8000/docs
+
+And I can:
+
+- Create custom agents
+
+- Chat with them
+
+- Upload files
+
+- Run CEO morning analysis
+
+- Approve tasks
+
+- Watch agents collaborate in real time
+
+- Store all data locally
