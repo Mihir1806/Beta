@@ -1,9 +1,12 @@
-'{
-  "model": "' + [Model] + '",
-  "messages": [
-    {
-      "role": "user",
-      "content": "' + [Prompt] + '"
-    }
-  ]
-}'
+WHERE
+to_date(concat('01', A), 'ddMMMyy')
+BETWEEN
+least(
+    to_date(concat('01', B), 'ddMMMyy'),
+    to_date(concat('01', C), 'ddMMMyy')
+)
+AND
+greatest(
+    to_date(concat('01', B), 'ddMMMyy'),
+    to_date(concat('01', C), 'ddMMMyy')
+)
