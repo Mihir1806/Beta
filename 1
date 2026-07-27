@@ -1,12 +1,121 @@
-WHERE
-to_date(concat('01', A), 'ddMMMyy')
-BETWEEN
-least(
-    to_date(concat('01', B), 'ddMMMyy'),
-    to_date(concat('01', C), 'ddMMMyy')
-)
-AND
-greatest(
-    to_date(concat('01', B), 'ddMMMyy'),
-    to_date(concat('01', C), 'ddMMMyy')
-)
+Here is a comprehensive 10-slide summary on **Priority Sector Lending (PSL) Quarterly Reporting**, crafted specifically from Reserve Bank of India (RBI) guidelines.
+This layout is structured so you can directly adapt it into PowerPoint slides or Google Slides.
+## Slide 1: Executive Summary & Regulatory Context
+### Overview of PSL Quarterly Reporting
+ * **Mandate:** RBI obligates commercial, regional, cooperative, and small finance banks to allocate a specific percentage of adjusted bank credit to designated priority sectors.
+ * **Core Objective:** Direct timely credit to crucial sectors (Agriculture, MSMEs, Export, Housing, Education, Renewable Energy) that otherwise struggle for formal institutional credit.
+ * **Why Quarterly Reporting Matters:** Shifted from annual compliance to **Quarterly Average Monitoring** to prevent "end-of-year window dressing" and ensure a smooth, continuous flow of credit throughout the financial year.
+ * **Primary Regulator:** Financial Inclusion and Development Department (FIDD), Reserve Bank of India.
+> **Speaker Note:** Emphasize that PSL compliance is no longer a March 31st rush; it is an ongoing quarterly operational requirement.
+> 
+## Slide 2: Applicable Entities & Overall Targets
+### Target Allocation Matrix by Bank Category
+| Bank Category | Overall PSL Target | Key Condition / Base |
+|---|---|---|
+| **Domestic Scheduled Commercial Banks (SCBs)** | **40%** | Higher of ANBC or CEOBE |
+| **Foreign Banks (≥20 branches)** | **40%** | Higher of ANBC or CEOBE |
+| **Foreign Banks (<20 branches)** | **40%** | Up to 32% can be Export Credit; balance in other PSL sectors |
+| **Regional Rural Banks (RRBs)** | **75%** | Higher of ANBC or CEOBE |
+| **Small Finance Banks (SFBs)** | **75%** | Higher of ANBC or CEOBE |
+| **Primary (Urban) Co-operative Banks (UCBs)** | **75%** | Phased targets (Reaching 75% target) |
+ * **ANBC:** Adjusted Net Bank Credit
+ * **CEOBE:** Credit Equivalent Amount of Off-Balance Sheet Exposure
+> **Speaker Note:** Note the distinct gap: RRBs and SFBs carry a much higher target (75%) due to their specific mandates for rural and micro-level financial inclusion.
+> 
+## Slide 3: Sub-Sector Mandates & Target Distribution
+### Key Sub-Targets for Domestic SCBs & SFBs
+ * **Agriculture Sector:** **18%** of ANBC/CEOBE.
+   * **Small & Marginal Farmers (SMF):** Dedicated sub-target of **10%** within Agriculture.
+ * **Micro Enterprises:** **7.5%** of ANBC/CEOBE.
+ * **Weaker Sections:** **12%** of ANBC/CEOBE (includes SCs/STs, SHGs, beneficiaries of government schemes, distressed farmers, persons with disabilities, etc.).
+ * **Non-Targeted PSL Sectors:** Education, Housing (up to specific loan limits), Social Infrastructure, Renewable Energy, and Export Credit.
+> **Speaker Note:** Sub-targets are strictly monitored individually. A bank cannot offset a shortfall in Micro Enterprises with a surplus in Housing.
+> 
+## Slide 4: Base Computation Mechanics (ANBC vs. CEOBE)
+### Defining the Benchmark Base
+ * Targets are calculated based on **ANBC** or **CEOBE**, whichever is **higher** as of **March 31 of the PRECEDING Financial Year**.
+### Key Components of ANBC
+```
+  [ Gross Bank Credit ]
+           │
+           ▼
+  - Deductions (Bills Rediscounted with RBI/Eligible Financial Institutions)
+           │
+           ▼
+  + Additions (Eligible Non-SLR Investments in HTM Category)
+           │
+           ▼
+  = Adjusted Net Bank Credit (ANBC)
+
+```
+> **Speaker Note:** Because the base is locked on March 31 of the previous FY, banks know their absolute numeric PSL target values at the start of Q1.
+> 
+## Slide 5: The Quarterly Assessment Methodology
+### Shift to "Average of Four Quarters"
+ * **Assessment Frequency:** Monitored at the end of each quarter (June 30, September 30, December 31, March 31).
+ * **Prevention of Volatility:** Prevents banks from buying short-term assets or aggressively lending solely in the last two weeks of March.
+ * **Pro-rata Evaluation:** Each quarter’s outstanding PSL balances are evaluated against the locked base (ANBC/CEOBE of preceding March 31).
+> **Speaker Note:** Compliance is graded at the end of the year by averaging the four quarterly data points. A severe drop in Q1 or Q2 will drag down the final annual compliance score.
+> 
+## Slide 6: Quarterly Reporting & Data Submission Framework
+### Operational Steps for Submission
+ * **Reporting Portal:** RBI’s Integrated Reporting Architecture / e-Kuber portal / XBRL-based data submission systems.
+ * **Frequency:** Quarterly submission (typically required within **15 days** from the close of the quarter).
+ * **Data Granularity Required:**
+   * Sector-wise break-up (Agriculture, Micro, Small, Medium, Housing, etc.).
+   * Sub-target breakdown (Small & Marginal Farmers, Weaker Sections).
+   * State-wise and District-wise credit dissemination (to track spatial disbursement).
+   * District-level credit flow weights (RBI assigns higher weightage—125%—to credit in low-PSL districts and lower weightage—90%—in high-PSL districts).
+> **Speaker Note:** Mention the district-level weightage system introduced by RBI to correct regional imbalances in credit flow.
+> 
+## Slide 7: Priority Sector Lending Certificates (PSLCs)
+### Managing Quarterly Shortfalls & Surpluses
+ * **What are PSLCs?** A market-driven mechanism enabling banks to trade PSL achievements without transferring the underlying loan assets or risks.
+ * **Trading Platform:** RBI’s **e-Kuber** portal.
+ * **Four Categories of PSLCs:**
+   1. **PSLC Agriculture**
+   2. **PSLC SFM** (Small & Marginal Farmers)
+   3. **PSLC Micro Enterprises**
+   4. **PSLC General** (Overall PSL compliance)
+### Quarterly Mechanics
+ * Banks buy/sell PSLCs quarterly to balance shortfalls shown in their quarterly returns.
+ * Expiry: All PSLCs expire on **March 31** of the respective financial year.
+> **Speaker Note:** Buying PSLCs in Q1 or Q2 is usually cheaper than waiting until Q4 when market demand surges and premiums spike.
+> 
+## Slide 8: Penalty Mechanisms for Non-Achievement
+### Consequences of a Net Shortfall at Year-End
+ * If the **Average of 4 Quarters** shows a shortfall against overall or sub-targets, RBI penalizes the bank.
+```
+       [ Shortfall Identified in 4-Quarter Average ]
+                           │
+                           ▼
+  [ Mandatory Contribution to Specific Development Funds ]
+   (e.g., RIDF with NABARD, SIDBI, NHB, MUDRA Funds)
+                           │
+                           ▼
+  [ Low Yield / Penal Interest Rate Received by Bank ]
+
+```
+### Financial Impact
+ * **Cost of Funds vs. Return:** Yields on RIDF deposits are inversely tied to the degree of shortfall (i.e., larger shortfall = lower interest rate earned by the bank).
+ * **Capital Lock-in:** Funds are typically locked in for 3 to 7 years, impacting bank liquidity and net interest margin (NIM).
+> **Speaker Note:** Shortfalls directly hit profitability because money is moved from high-yielding loans into low-yielding RIDF deposits.
+> 
+## Slide 9: Common Misclassification Risks & Audit Requirements
+### Audit Oversight & RBI Validation
+ * **Internal & Concurrent Audits:** Banks must subject quarterly PSL reporting to regular internal audit before submission to RBI.
+ * **Key Misclassification Risks:**
+   * Classifying Medium Enterprises as Micro.
+   * Tagging general agricultural loans as "Small & Marginal Farmers" without verified landholding documentation.
+   * Over-reporting housing loans above eligibility price/cost thresholds.
+   * Counting expired or non-performing assets incorrectly.
+> **Speaker Note:** RBI conducts financial inspection (ISE) and re-classifies wrongly claimed PSL loans. Non-compliance leads to retroactive adjustment of quarterly figures and financial penalties.
+> 
+## Slide 10: Best Practices for Bank Management
+### Strategic Action Items
+ 1. **Early Tracking:** Calculate target base on April 1 and set quarter-wise milestones rather than leaving compliance to Q3/Q4.
+ 2. **Active PSLC Management:** Utilize the e-Kuber portal proactively in Q1/Q2 to lock in low PSLC premium rates if shortfall is predicted.
+ 3. **Incentivize High-Weightage Districts:** Focus lending operations in districts with < ₹6,000 per capita PSL flow to get 125% weightage calculation benefits.
+ 4. **Data Hygiene:** Standardize ground-level documentation (land records, Udyam certificates for MSMEs) to avoid audit disallowances.
+> **Speaker Note:** Treat PSL not merely as a uh compliance chore, but as a strategic business portfolio that can generate fee income via PSLC sales if managed with a surplus.
+>
